@@ -1,0 +1,136 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f5f5f7;
+  --bg-elevated: #ffffff;
+  --bg-tinted: #fbfbfd;
+  --bg-sidebar: #fafafa;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #86868b;
+  --separator: rgba(0, 0, 0, 0.08);
+  --separator-strong: rgba(0, 0, 0, 0.12);
+  --blue: #0071e3;
+  --green: #30d158;
+  --orange: #ff9f0a;
+  --red: #ff3b30;
+  --purple: #bf5af2;
+  --indigo: #5e5ce6;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 40px 120px rgba(0, 0, 0, 0.18), 0 16px 48px rgba(0, 0, 0, 0.1);
+  --font-display: "Inter", -apple-system, sans-serif;
+  --font-tc: "Noto Sans TC", -apple-system, "PingFang TC", sans-serif;
+
+  --role-color: #0071e3;
+  --role-grad: linear-gradient(135deg, #0071e3, #5e5ce6);
+}
+
+[data-role="super-admin"] {
+  --role-color: #0071e3;
+  --role-grad: linear-gradient(135deg, #0071e3, #5e5ce6);
+}
+[data-role="company-admin"] {
+  --role-color: #30d158;
+  --role-grad: linear-gradient(135deg, #30d158, #0bb850);
+}
+[data-role="event-manager"] {
+  --role-color: #ff9f0a;
+  --role-grad: linear-gradient(135deg, #ff9f0a, #ff6a00);
+}
+[data-role="vendor"] {
+  --role-color: #bf5af2;
+  --role-grad: linear-gradient(135deg, #bf5af2, #5e5ce6);
+}
+[data-role="decorator"] {
+  --role-color: #ff6a00;
+  --role-grad: linear-gradient(135deg, #ff6a00, #ff2d92);
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  font-family: var(--font-tc);
+  background: var(--bg);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  min-height: 100vh;
+}
+
+@layer components {
+  .icon {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    flex-shrink: 0;
+  }
+
+  .panel {
+    @apply bg-white rounded-2xl shadow-sm p-6;
+    border: 1px solid var(--separator);
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium font-display;
+  }
+  .badge-green { background: rgba(48, 209, 88, 0.12); color: #1f8a3a; }
+  .badge-blue  { background: rgba(0, 113, 227, 0.12); color: #0058b8; }
+  .badge-orange{ background: rgba(255, 159, 10, 0.14); color: #b86b00; }
+  .badge-purple{ background: rgba(191, 90, 242, 0.14); color: #8b3fc4; }
+  .badge-gray  { background: rgba(0, 0, 0, 0.06); color: #6e6e73; }
+
+  .btn {
+    @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer;
+    border: 0;
+  }
+  .btn-primary { background: var(--role-color); color: #fff; }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn-ghost { background: rgba(0, 0, 0, 0.05); color: var(--text-secondary); }
+  .btn-ghost:hover { background: rgba(0, 0, 0, 0.08); color: var(--text-primary); }
+
+  .scene-tag {
+    @apply text-[11px] font-semibold uppercase tracking-widest font-display;
+    color: var(--role-color);
+  }
+  .scene-title {
+    @apply text-3xl md:text-4xl font-bold mt-2 mb-2;
+    letter-spacing: -0.02em;
+  }
+  .scene-desc {
+    @apply text-[15px] mb-8;
+    color: var(--text-secondary);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes scene-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.scene-in { animation: scene-in 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
