@@ -54,7 +54,6 @@ export default function CompanyDetail() {
               ["公司規模", company.size],
               ["地址", company.address],
               ["電話", company.phone],
-              ["方案", company.plan],
               ["建立日期", company.createdAt],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-3">

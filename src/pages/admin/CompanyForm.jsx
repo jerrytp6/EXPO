@@ -1,14 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useData } from "../../store/data";
-import { SceneHead, Panel, Field, Input } from "../../components/Scene";
+import { SceneHead, Panel, Field } from "../../components/Scene";
 import { toast } from "../../store/toast";
-
-const PLANS = [
-  { id: "Starter",    price: 2980,  label: "Starter",    desc: "適合新創與小型團隊" },
-  { id: "Business",   price: 8980,  label: "Business",   desc: "中型公司首選（推薦）" },
-  { id: "Enterprise", price: 19800, label: "Enterprise", desc: "大型企業完整功能" },
-];
 
 const INDUSTRIES = ["資訊服務業", "電子製造業", "設計服務業", "批發零售業", "金融保險業", "其他"];
 const SIZES = ["1–10 人", "10–50 人", "50–100 人", "100–500 人", "500+ 人"];
@@ -25,7 +19,6 @@ export default function CompanyForm() {
     size: SIZES[2],
     address: "",
     phone: "",
-    plan: "Business",
     adminName: "",
     adminTitle: "",
     adminEmail: "",
@@ -52,7 +45,6 @@ export default function CompanyForm() {
       size: form.size,
       address: form.address,
       phone: form.phone,
-      plan: form.plan,
     });
 
     const admin = createMember({
@@ -110,29 +102,6 @@ export default function CompanyForm() {
             <Field label="聯絡電話"><input className="w-full px-4 py-3 rounded-xl text-[14px] outline-none"
               style={{ background: "var(--bg-tinted)", border: "1px solid var(--separator)" }}
               value={form.phone} onChange={set("phone")} placeholder="02-xxxx-xxxx" /></Field>
-          </div>
-        </Panel>
-
-        <Panel title="服務方案">
-          <div className="grid grid-cols-3 gap-4">
-            {PLANS.map((p) => {
-              const sel = form.plan === p.id;
-              return (
-                <button type="button" key={p.id} onClick={() => setForm({ ...form, plan: p.id })}
-                  className="p-5 rounded-xl text-left transition-all"
-                  style={{
-                    border: sel ? "2px solid var(--role-color)" : "1px solid var(--separator)",
-                    background: sel ? "rgba(0,113,227,0.04)" : "var(--bg-tinted)",
-                  }}>
-                  <div className="text-[13px] font-display font-semibold mb-1">{p.label}</div>
-                  <div className="text-2xl font-bold tracking-tight">
-                    NT$ {p.price.toLocaleString()}
-                    <span className="text-[12px] font-normal" style={{ color: "var(--text-tertiary)" }}>/月</span>
-                  </div>
-                  <div className="text-[12px] mt-1" style={{ color: "var(--text-tertiary)" }}>{p.desc}</div>
-                </button>
-              );
-            })}
           </div>
         </Panel>
 

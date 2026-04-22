@@ -125,25 +125,30 @@ export default function Vendors() {
 
       {/* 待匯入 tab 的快速操作 */}
       {tab === "pending" && pendingConfirm.length > 0 && (
-        <div className="flex items-center gap-3 p-3 mb-4 rounded-xl"
-          style={{ background: "rgba(0,113,227,0.06)", border: "1px solid rgba(0,113,227,0.2)" }}>
-          <Icon name="sparkles" className="icon w-4 h-4" style={{ stroke: "var(--blue)" }} />
-          <span className="text-[13px]" style={{ color: "var(--blue)" }}>
-            {selectedPending.length > 0
-              ? `已選 ${selectedPending.length} 家`
-              : `${pendingConfirm.length} 家已報名廠商待加入參展名單`}
-          </span>
-          <div className="flex gap-2 ml-auto">
-            {selectedPending.length > 0 ? (
-              <button className="btn btn-primary !py-1.5 !text-xs" onClick={() => addToRoster(selectedPending)}>
-                加入參展名單
-              </button>
-            ) : (
-              <button className="btn btn-primary !py-1.5 !text-xs"
-                onClick={() => addToRoster(pendingConfirm.map((v) => v.id))}>
-                全部加入參展名單
-              </button>
-            )}
+        <div className="mb-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl"
+            style={{ background: "rgba(0,113,227,0.06)", border: "1px solid rgba(0,113,227,0.2)" }}>
+            <Icon name="sparkles" className="icon w-4 h-4" style={{ stroke: "var(--blue)" }} />
+            <span className="text-[13px]" style={{ color: "var(--blue)" }}>
+              {selectedPending.length > 0
+                ? `已選 ${selectedPending.length} 家`
+                : `${pendingConfirm.length} 家已報名廠商待加入參展名單`}
+            </span>
+            <div className="flex gap-2 ml-auto">
+              {selectedPending.length > 0 ? (
+                <button className="btn btn-primary !py-1.5 !text-xs" onClick={() => addToRoster(selectedPending)}>
+                  加入參展名單
+                </button>
+              ) : (
+                <button className="btn btn-primary !py-1.5 !text-xs"
+                  onClick={() => addToRoster(pendingConfirm.map((v) => v.id))}>
+                  全部加入參展名單
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="text-[11px] font-display mt-2 px-1" style={{ color: "var(--orange)" }}>
+            * 請確認已收到廠商訂金後再加入參展名單。訂金繳費狀態可在「攤位分配」頁追蹤。
           </div>
         </div>
       )}

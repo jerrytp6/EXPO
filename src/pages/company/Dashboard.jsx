@@ -14,14 +14,14 @@ export default function CompanyDashboard() {
   const myVendors = vendors.filter((v) => myEvents.find((e) => e.id === v.eventId));
 
   const STATUS_COLOR = {
-    preparing: "badge-blue",
-    inviting: "badge-orange",
     planning: "badge-gray",
+    recruiting: "badge-orange",
+    preparing: "badge-blue",
   };
   const STATUS_LABEL = {
-    preparing: "籌備中",
-    inviting: "邀請中",
     planning: "規劃中",
+    recruiting: "招商中",
+    preparing: "籌備中",
   };
 
   return (

@@ -5,31 +5,37 @@ import { useData } from "../store/data";
 import { Icon } from "./Icon";
 import { toast } from "../store/toast";
 
-// 各角色的靜態側邊選單
+// 各角色的靜態側邊選單（對齊客戶 13 模組 + PDF 架構）
 const MENU = {
   "super-admin": {
     dataRole: "super-admin",
     items: [
-      { to: "/admin",            label: "儀表板",     icon: "activity", end: true },
-      { to: "/admin/companies",  label: "企業管理",   icon: "building" },
-      { to: "/admin/companies/new", label: "建立企業", icon: "sparkles" },
+      { to: "/admin",               label: "儀表板",       icon: "activity", end: true },
+      { to: "/admin/companies",     label: "租戶管理",     icon: "building" },
+      { to: "/admin/companies/new", label: "建立租戶",     icon: "sparkles" },
     ],
   },
   "company-admin": {
     dataRole: "company-admin",
     items: [
-      { to: "/company",              label: "儀表板",     icon: "activity", end: true },
-      { to: "/company/members",      label: "成員管理",   icon: "users" },
-      { to: "/company/permissions",  label: "權限管理",   icon: "shield" },
-      { to: "/company/events",       label: "展覽活動",   icon: "calendar" },
-      { to: "/company/events/new",   label: "建立活動",   icon: "sparkles" },
+      { to: "/company",                      label: "儀表板",         icon: "activity", end: true },
+      { type: "divider", label: "活動" },
+      { to: "/company/events",               label: "展覽活動",       icon: "calendar" },
+      { to: "/company/events/new",           label: "建立活動",       icon: "sparkles" },
+      { type: "divider", label: "帳號管理" },
+      { to: "/company/members",              label: "成員帳號",       icon: "users" },
+      { to: "/company/permissions",          label: "權限管理",       icon: "shield" },
+      { to: "/company/vendor-accounts",      label: "參展廠商帳號",   icon: "user_check" },
+      { to: "/company/decorator-accounts",   label: "裝潢廠商帳號",   icon: "tool" },
+      { type: "divider", label: "郵件系統" },
+      { to: "/company/email-templates",      label: "預設郵件模板",   icon: "mail" },
+      { to: "/company/smtp",                 label: "郵件系統設定",   icon: "settings" },
     ],
   },
   "event-manager": {
     dataRole: "event-manager",
     items: [
       { to: "/event",            label: "我的活動",   icon: "calendar", end: true },
-      { to: "/event/documents",  label: "文件管理",   icon: "upload" },
     ],
   },
   member: {
@@ -41,16 +47,21 @@ const MENU = {
   },
 };
 
-// 活動管理者進入特定活動時的子導覽
+// 活動管理者進入特定活動時的子導覽（對齊 PDF 流程）
 function getEventSubMenu(eventId) {
   const base = `/event/${eventId}`;
   return [
-    { to: `${base}/vendors`,           label: "廠商管理",   icon: "users" },
-    { to: `${base}/import`,            label: "匯入廠商",   icon: "upload" },
-    { to: `${base}/invite`,            label: "寄送邀請",   icon: "send" },
-    { to: `${base}/monitor`,           label: "即時監控",   icon: "activity" },
-    { to: `${base}/submissions`,       label: "資料繳交",   icon: "check" },
-    { to: `${base}/submissions/config`, label: "繳交設定",  icon: "shield" },
+    { to: `${base}/vendors`,           label: "參展商管理",     icon: "users" },
+    { to: `${base}/recruit`,           label: "廠商招展",       icon: "send" },
+    { to: `${base}/import`,            label: "匯入廠商",       icon: "upload" },
+    { to: `${base}/booths`,            label: "攤位配置",       icon: "building" },
+    { to: `${base}/notices`,           label: "文件管理",       icon: "document" },
+    { to: `${base}/forms`,             label: "表單管理",       icon: "check" },
+    { to: `${base}/equipment`,         label: "設備申請",       icon: "package" },
+    { to: `${base}/pre-event`,         label: "展前通知",       icon: "bell" },
+    { to: `${base}/email-templates`,   label: "郵件通知模板",   icon: "mail" },
+    { to: `${base}/monitor`,           label: "即時監控",       icon: "activity" },
+    { to: `${base}/submissions`,       label: "資料繳交（舊）", icon: "archive" },
   ];
 }
 

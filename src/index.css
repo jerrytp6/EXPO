@@ -95,12 +95,43 @@ body,
 
   .btn {
     @apply inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer;
-    border: 0;
+    border: 1px solid var(--separator);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
   }
-  .btn-primary { background: var(--role-color); color: #fff; }
-  .btn-primary:hover { filter: brightness(1.05); }
-  .btn-ghost { background: rgba(0, 0, 0, 0.05); color: var(--text-secondary); }
+  .btn:hover { background: var(--bg-tinted); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--role-color); color: #fff; border-color: transparent; }
+  .btn-primary:hover { filter: brightness(1.05); background: var(--role-color); }
+  .btn-ghost { background: rgba(0, 0, 0, 0.05); color: var(--text-secondary); border-color: transparent; }
   .btn-ghost:hover { background: rgba(0, 0, 0, 0.08); color: var(--text-primary); }
+  .btn-sm { @apply px-3 py-1 text-xs; }
+  .btn-danger { background: var(--red); color: #fff; border-color: transparent; }
+  .btn-danger:hover { filter: brightness(1.05); background: var(--red); }
+
+  .input {
+    @apply w-full px-4 py-2.5 rounded-xl text-[14px] outline-none transition-all;
+    background: var(--bg-tinted);
+    border: 1px solid var(--separator);
+    color: var(--text-primary);
+    font-family: inherit;
+  }
+  .input:focus {
+    border-color: var(--role-color);
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.12);
+  }
+  textarea.input { resize: vertical; min-height: 100px; font-family: inherit; }
+
+  .chip {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium;
+    background: var(--bg-tinted);
+    color: var(--text-secondary);
+  }
+  .chip-green  { background: rgba(48, 209, 88, 0.12);  color: #1f8a3a; }
+  .chip-blue   { background: rgba(0, 113, 227, 0.12);  color: #0058b8; }
+  .chip-orange { background: rgba(255, 159, 10, 0.14); color: #b86b00; }
+  .chip-red    { background: rgba(255, 59, 48, 0.12);  color: #b8332d; }
+  .chip-purple { background: rgba(191, 90, 242, 0.14); color: #8b3fc4; }
 
   .scene-tag {
     @apply text-[11px] font-semibold uppercase tracking-widest font-display;

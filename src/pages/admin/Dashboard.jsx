@@ -90,7 +90,7 @@ export default function AdminDashboard() {
           header
           cols={[
             { content: "企業名稱", w: "2fr" },
-            { content: "方案", w: "1fr" },
+            { content: "產業別", w: "1fr" },
             { content: "狀態", w: "1fr" },
             { content: "建立日期", w: "1fr" },
           ]}
@@ -108,7 +108,7 @@ export default function AdminDashboard() {
                 ),
                 w: "2fr",
               },
-              { content: <span className="badge badge-blue">{c.plan}</span>, w: "1fr" },
+              { content: c.industry, w: "1fr" },
               { content: <span className="badge badge-green">啟用中</span>, w: "1fr" },
               { content: <span className="font-display">{c.createdAt}</span>, w: "1fr" },
             ]}

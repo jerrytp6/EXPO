@@ -49,7 +49,7 @@ export default function Companies() {
             { content: "企業名稱", w: "2fr" },
             { content: "統編", w: "1fr" },
             { content: "產業", w: "1fr" },
-            { content: "方案", w: "0.8fr" },
+            { content: "規模", w: "0.8fr" },
             { content: "狀態", w: "0.8fr" },
           ]}
         />
@@ -68,7 +68,7 @@ export default function Companies() {
               },
               { content: <span className="font-display">{c.taxId}</span>, w: "1fr" },
               { content: c.industry, w: "1fr" },
-              { content: <span className="badge badge-blue">{c.plan}</span>, w: "0.8fr" },
+              { content: c.size || "—", w: "0.8fr" },
               {
                 content: (
                   <span className={`badge ${c.status === "active" ? "badge-green" : "badge-orange"}`}>

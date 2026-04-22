@@ -71,7 +71,7 @@ export const useData = create((set, get) => ({
   createEvent: (payload) => {
     const event = {
       id: uid("e"),
-      status: "planning",
+      status: "planning", // planning → recruiting → preparing
       managerId: null,
       createdAt: new Date().toISOString().slice(0, 10),
       ...payload,
@@ -113,6 +113,7 @@ export const useData = create((set, get) => ({
       confirmedAt: null,
       confirmedBy: null,
       confirmNote: "",
+      preferredBoothTypeId: null,
       ...r,
     }));
     const next = db.write((d) => {
@@ -165,6 +166,27 @@ export const useData = create((set, get) => ({
         v.registeredAt = new Date().toISOString();
         d.activities.unshift({ id: uid("a"), eventId: v.eventId, vendorId, action: "registered", at: Date.now() });
       }
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // ───── 攤位分配與繳費 ─────
+  assignBooth: (vendorId, boothTypeId, boothNumber) => {
+    const next = db.write((d) => {
+      const v = d.vendors.find((x) => x.id === vendorId);
+      if (v) {
+        v.boothTypeId = boothTypeId;
+        v.boothNumber = boothNumber;
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+  updatePaymentStatus: (vendorId, field, value) => {
+    const next = db.write((d) => {
+      const v = d.vendors.find((x) => x.id === vendorId);
+      if (v) v[field] = value;
       return d;
     });
     set({ ...next });
@@ -546,6 +568,511 @@ export const useData = create((set, get) => ({
     return reminder;
   },
 
+  // ═════════════════════════════════════════════════════════
+  // ══════════  v12 新增：對應 PDF 五大業務流程 CRUD ══════════
+  // ═════════════════════════════════════════════════════════
+
+  // ───── RSVP（邀約回覆）─────
+  respondRsvp: (token, response, reason = "") => {
+    const data = get();
+    const inv = data.invitations.find((i) => i.token === token);
+    if (!inv) return null;
+    const at = new Date().toISOString().slice(0, 10);
+    const record = {
+      id: uid("rsvp"),
+      token,
+      eventId: inv.eventId,
+      vendorId: inv.vendorId,
+      response, // "accepted" | "declined"
+      reason,
+      respondedAt: at,
+    };
+    const next = db.write((d) => {
+      // 更新 vendor.rsvpStatus
+      const v = d.vendors.find((x) => x.id === inv.vendorId);
+      if (v) {
+        v.rsvpStatus = response;
+        v.rsvpRespondedAt = at;
+        if (response === "declined") v.status = "declined";
+      }
+      // 覆寫舊紀錄或新增
+      d.rsvpResponses = (d.rsvpResponses || []).filter((r) => r.token !== token);
+      d.rsvpResponses.push(record);
+      return d;
+    });
+    set({ ...next });
+    return record;
+  },
+
+  // ───── 廠商裝潢模式設定（進入活動前的卡片選擇）─────
+  setVendorDecorationMode: (vendorId, mode) => {
+    // mode: "self" | "booth-vendor"
+    const next = db.write((d) => {
+      const v = d.vendors.find((x) => x.id === vendorId);
+      if (v) v.decorationMode = mode;
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // ───── 攤位自選開關 ─────
+  setBoothSelfSelection: (eventId, enabled) => {
+    const next = db.write((d) => {
+      const e = d.events.find((x) => x.id === eventId);
+      if (e) e.boothSelfSelectionEnabled = !!enabled;
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // ───── 文件須知 CRUD ─────
+  createNotice: (payload) => {
+    const notice = {
+      id: uid("n"),
+      category: "其他",
+      requiresAck: true,
+      allowDecoratorView: false,
+      sortOrder: (get().eventNotices || []).length + 1,
+      publishedAt: new Date().toISOString().slice(0, 10),
+      attachmentName: null,
+      ...payload,
+    };
+    const next = db.write((d) => {
+      if (!d.eventNotices) d.eventNotices = [];
+      d.eventNotices.push(notice);
+      return d;
+    });
+    set({ ...next });
+    return notice;
+  },
+  updateNotice: (id, patch) => {
+    const next = db.write((d) => {
+      const n = d.eventNotices?.find((x) => x.id === id);
+      if (n) Object.assign(n, patch);
+      return d;
+    });
+    set({ ...next });
+  },
+  deleteNotice: (id) => {
+    const next = db.write((d) => {
+      d.eventNotices = (d.eventNotices || []).filter((x) => x.id !== id);
+      d.noticeAcknowledgments = (d.noticeAcknowledgments || []).filter((x) => x.noticeId !== id);
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // 廠商勾選同意
+  acknowledgeNotice: (eventId, vendorId, noticeId) => {
+    const at = new Date().toISOString().slice(0, 10);
+    const next = db.write((d) => {
+      if (!d.noticeAcknowledgments) d.noticeAcknowledgments = [];
+      const existed = d.noticeAcknowledgments.find(
+        (x) => x.eventId === eventId && x.vendorId === vendorId && x.noticeId === noticeId
+      );
+      if (!existed) {
+        d.noticeAcknowledgments.push({ id: uid("ack"), eventId, vendorId, noticeId, acknowledgedAt: at });
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // Helper：廠商視角的須知列表（含勾選狀態）
+  getNoticesForVendor: (eventId, vendorId) => {
+    const state = get();
+    const notices = (state.eventNotices || []).filter((n) => n.eventId === eventId);
+    const acks = (state.noticeAcknowledgments || []).filter(
+      (a) => a.eventId === eventId && a.vendorId === vendorId
+    );
+    return notices.map((n) => ({
+      ...n,
+      acknowledged: acks.some((a) => a.noticeId === n.id),
+      acknowledgedAt: acks.find((a) => a.noticeId === n.id)?.acknowledgedAt || null,
+    })).sort((a, b) => a.sortOrder - b.sortOrder);
+  },
+
+  // ───── 表單 CRUD ─────
+  createForm: (payload) => {
+    const form = {
+      id: uid("f"),
+      category: "其他",
+      isRequired: true,
+      hasFee: false,
+      skipOption: false,
+      showWhen: null,
+      allowDecoratorUpload: false,
+      formats: ".pdf",
+      sortOrder: (get().eventForms || []).length + 1,
+      ...payload,
+    };
+    const next = db.write((d) => {
+      if (!d.eventForms) d.eventForms = [];
+      d.eventForms.push(form);
+      return d;
+    });
+    set({ ...next });
+    return form;
+  },
+  updateForm: (id, patch) => {
+    const next = db.write((d) => {
+      const f = d.eventForms?.find((x) => x.id === id);
+      if (f) Object.assign(f, patch);
+      return d;
+    });
+    set({ ...next });
+  },
+  deleteForm: (id) => {
+    const next = db.write((d) => {
+      d.eventForms = (d.eventForms || []).filter((x) => x.id !== id);
+      d.formSubmissions = (d.formSubmissions || []).filter((x) => x.formId !== id);
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // 條件顯示過濾：某廠商在該活動應看到的表單清單
+  getFormsForVendor: (eventId, vendorId) => {
+    const state = get();
+    const vendor = state.vendors.find((v) => v.id === vendorId);
+    if (!vendor) return [];
+    const forms = (state.eventForms || []).filter((f) => f.eventId === eventId);
+    return forms
+      .filter((f) => {
+        if (!f.showWhen) return true;
+        return vendor[f.showWhen.field] === f.showWhen.value;
+      })
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  },
+
+  // 表單繳交
+  submitForm: (eventId, vendorId, formId, payload) => {
+    const form = get().eventForms?.find((f) => f.id === formId);
+    const initialStatus = form?.hasFee ? "pending_fee_review" : "submitted";
+    const sub = {
+      id: uid("fs"),
+      eventId,
+      vendorId,
+      formId,
+      fileName: payload.fileName,
+      fileSize: payload.fileSize || "—",
+      submittedAt: new Date().toISOString().slice(0, 10),
+      status: initialStatus,
+      fee: payload.fee || null,
+      paymentProofFileName: payload.paymentProofFileName || null,
+      reviewedAt: null,
+      reviewedBy: null,
+      feedback: "",
+      vendorConfirmed: false,
+      vendorConfirmedAt: null,
+      needsReconfirm: false,
+      uploadedByRole: payload.uploadedByRole || "vendor",
+    };
+    const next = db.write((d) => {
+      if (!d.formSubmissions) d.formSubmissions = [];
+      // 移除同一廠商同一表單的 rejected 舊紀錄
+      d.formSubmissions = d.formSubmissions.filter(
+        (s) => !(s.eventId === eventId && s.vendorId === vendorId && s.formId === formId && s.status === "rejected")
+      );
+      d.formSubmissions.push(sub);
+      return d;
+    });
+    set({ ...next });
+    return sub;
+  },
+
+  reviewFormSubmission: (submissionId, status, feedback, reviewerName) => {
+    const at = new Date().toISOString().slice(0, 10);
+    const next = db.write((d) => {
+      const sub = d.formSubmissions?.find((x) => x.id === submissionId);
+      if (sub) {
+        sub.status = status;
+        sub.feedback = feedback || "";
+        sub.reviewedAt = at;
+        sub.reviewedBy = reviewerName;
+        if (status !== "approved") sub.needsReconfirm = true;
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // 廠商端「確認完成」（三態確認的第一態）
+  confirmFormSubmission: (submissionId) => {
+    const at = new Date().toISOString().slice(0, 10);
+    const next = db.write((d) => {
+      const sub = d.formSubmissions?.find((x) => x.id === submissionId);
+      if (sub) {
+        sub.vendorConfirmed = true;
+        sub.vendorConfirmedAt = at;
+        sub.needsReconfirm = false;
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // 管理員端：觸發廠商重新確認
+  triggerReconfirm: (submissionId) => {
+    const next = db.write((d) => {
+      const sub = d.formSubmissions?.find((x) => x.id === submissionId);
+      if (sub) {
+        sub.vendorConfirmed = false;
+        sub.vendorConfirmedAt = null;
+        sub.needsReconfirm = true;
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // ───── 設備目錄 CRUD ─────
+  createEquipmentItem: (payload) => {
+    const item = {
+      id: uid("eq"),
+      category: "其他",
+      unit: "組",
+      unitPrice: 0,
+      stock: 0,
+      ...payload,
+    };
+    const next = db.write((d) => {
+      if (!d.eventEquipmentCatalog) d.eventEquipmentCatalog = [];
+      d.eventEquipmentCatalog.push(item);
+      return d;
+    });
+    set({ ...next });
+    return item;
+  },
+  updateEquipmentItem: (id, patch) => {
+    const next = db.write((d) => {
+      const i = d.eventEquipmentCatalog?.find((x) => x.id === id);
+      if (i) Object.assign(i, patch);
+      return d;
+    });
+    set({ ...next });
+  },
+  deleteEquipmentItem: (id) => {
+    const next = db.write((d) => {
+      d.eventEquipmentCatalog = (d.eventEquipmentCatalog || []).filter((x) => x.id !== id);
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // 設備申請（廠商建立）
+  createEquipmentRequest: (eventId, vendorId, items) => {
+    const catalog = get().eventEquipmentCatalog || [];
+    const total = items.reduce((sum, it) => {
+      const cat = catalog.find((c) => c.id === it.catalogId);
+      return sum + (cat?.unitPrice || 0) * (it.qty || 0);
+    }, 0);
+    const req = {
+      id: uid("er"),
+      eventId,
+      vendorId,
+      items,
+      totalAmount: total,
+      status: "draft",
+      pdfGeneratedAt: null,
+      signedFileName: null,
+      paymentProofFileName: null,
+      paidAt: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      feedback: "",
+      createdAt: new Date().toISOString().slice(0, 10),
+      updatedAt: new Date().toISOString().slice(0, 10),
+      vendorConfirmed: false,
+      vendorConfirmedAt: null,
+      needsReconfirm: false,
+    };
+    const next = db.write((d) => {
+      if (!d.equipmentRequests) d.equipmentRequests = [];
+      d.equipmentRequests.push(req);
+      return d;
+    });
+    set({ ...next });
+    return req;
+  },
+  updateEquipmentRequest: (id, patch) => {
+    const next = db.write((d) => {
+      const r = d.equipmentRequests?.find((x) => x.id === id);
+      if (r) {
+        Object.assign(r, patch, { updatedAt: new Date().toISOString().slice(0, 10) });
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+  reviewEquipmentRequest: (id, status, feedback, reviewerName) => {
+    const at = new Date().toISOString().slice(0, 10);
+    const next = db.write((d) => {
+      const r = d.equipmentRequests?.find((x) => x.id === id);
+      if (r) {
+        r.status = status;
+        r.feedback = feedback || "";
+        r.reviewedBy = reviewerName;
+        r.reviewedAt = at;
+        r.updatedAt = at;
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // ───── 郵件模板 CRUD ─────
+  createEmailTemplate: (payload) => {
+    const tpl = {
+      id: uid("et"),
+      scope: "event",
+      isSystem: false,
+      updatedAt: new Date().toISOString().slice(0, 10),
+      ...payload,
+    };
+    const next = db.write((d) => {
+      if (!d.emailTemplates) d.emailTemplates = [];
+      d.emailTemplates.push(tpl);
+      return d;
+    });
+    set({ ...next });
+    return tpl;
+  },
+  updateEmailTemplate: (id, patch) => {
+    const next = db.write((d) => {
+      const t = d.emailTemplates?.find((x) => x.id === id);
+      if (t) Object.assign(t, patch, { updatedAt: new Date().toISOString().slice(0, 10) });
+      return d;
+    });
+    set({ ...next });
+  },
+  deleteEmailTemplate: (id) => {
+    const next = db.write((d) => {
+      d.emailTemplates = (d.emailTemplates || []).filter((x) => !(x.id === id && !x.isSystem));
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // 複製租戶預設模板到新活動（建立活動時呼叫）
+  copyTenantTemplatesToEvent: (companyId, eventId) => {
+    const tenantTpls = (get().emailTemplates || []).filter(
+      (t) => t.scope === "tenant" && t.companyId === companyId
+    );
+    const at = new Date().toISOString().slice(0, 10);
+    const clones = tenantTpls.map((t) => ({
+      ...t,
+      id: uid("et"),
+      scope: "event",
+      eventId,
+      isSystem: false,
+      updatedAt: at,
+    }));
+    const next = db.write((d) => {
+      if (!d.emailTemplates) d.emailTemplates = [];
+      d.emailTemplates.push(...clones);
+      return d;
+    });
+    set({ ...next });
+    return clones;
+  },
+
+  // ───── SMTP 設定 ─────
+  updateSmtpSettings: (companyId, patch) => {
+    const next = db.write((d) => {
+      if (!d.smtpSettings) d.smtpSettings = [];
+      let cfg = d.smtpSettings.find((s) => s.companyId === companyId);
+      if (!cfg) {
+        cfg = { companyId, host: "", port: 587, secure: "tls", username: "", passwordMasked: "", fromName: "", fromEmail: "", replyTo: "", testedAt: null, testStatus: null, testError: "" };
+        d.smtpSettings.push(cfg);
+      }
+      Object.assign(cfg, patch);
+      return d;
+    });
+    set({ ...next });
+  },
+  testSmtpConnection: (companyId) => {
+    // Demo 模擬測試
+    const at = new Date().toISOString();
+    const ok = Math.random() > 0.1;
+    const next = db.write((d) => {
+      const cfg = d.smtpSettings?.find((s) => s.companyId === companyId);
+      if (cfg) {
+        cfg.testedAt = at;
+        cfg.testStatus = ok ? "success" : "failed";
+        cfg.testError = ok ? "" : "連線逾時（demo 模擬）";
+      }
+      return d;
+    });
+    set({ ...next });
+    return ok;
+  },
+
+  // ───── 展前通知 ─────
+  createPreEventNotice: (payload) => {
+    const pe = {
+      id: uid("pe"),
+      audience: "registered",
+      channels: ["email", "portal"],
+      status: "draft",
+      sentAt: null,
+      attachments: [],
+      ...payload,
+    };
+    const next = db.write((d) => {
+      if (!d.preEventNotices) d.preEventNotices = [];
+      d.preEventNotices.push(pe);
+      return d;
+    });
+    set({ ...next });
+    return pe;
+  },
+  updatePreEventNotice: (id, patch) => {
+    const next = db.write((d) => {
+      const p = d.preEventNotices?.find((x) => x.id === id);
+      if (p) Object.assign(p, patch);
+      return d;
+    });
+    set({ ...next });
+  },
+  deletePreEventNotice: (id) => {
+    const next = db.write((d) => {
+      d.preEventNotices = (d.preEventNotices || []).filter((x) => x.id !== id);
+      return d;
+    });
+    set({ ...next });
+  },
+  sendPreEventNotice: (id) => {
+    const at = new Date().toISOString();
+    const next = db.write((d) => {
+      const p = d.preEventNotices?.find((x) => x.id === id);
+      if (p) { p.status = "sent"; p.sentAt = at; }
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // ───── Tenant Guard（多租戶隔離 helper）─────
+  // 傳入 user 與資源 companyId，判斷是否允許存取
+  // super-admin 可跨租戶；其他角色必須 companyId 相符
+  canAccessTenant: (user, companyId) => {
+    if (!user) return false;
+    if (user.role === "super-admin") return true;
+    return user.companyId === companyId;
+  },
+  canAccessEvent: (user, eventId) => {
+    if (!user) return false;
+    if (user.role === "super-admin") return true;
+    const event = get().events.find((e) => e.id === eventId);
+    return event?.companyId === user.companyId;
+  },
+  getMyEvents: (user) => {
+    if (!user) return [];
+    const all = get().events;
+    if (user.role === "super-admin") return all;
+    return all.filter((e) => e.companyId === user.companyId);
+  },
+
   // ───── Helpers ─────
   byId: {
     company: (id) => get().companies.find((x) => x.id === id),
@@ -556,5 +1083,13 @@ export const useData = create((set, get) => ({
     project: (id) => get().decorationProjects.find((x) => x.id === id),
     invitation: (token) => get().invitations.find((x) => x.token === token),
     decoratorInvitation: (token) => get().decoratorInvitations.find((x) => x.token === token),
+    notice: (id) => get().eventNotices?.find((x) => x.id === id),
+    form: (id) => get().eventForms?.find((x) => x.id === id),
+    equipmentItem: (id) => get().eventEquipmentCatalog?.find((x) => x.id === id),
+    equipmentRequest: (id) => get().equipmentRequests?.find((x) => x.id === id),
+    emailTemplate: (id) => get().emailTemplates?.find((x) => x.id === id),
+    smtp: (companyId) => get().smtpSettings?.find((x) => x.companyId === companyId),
+    preEventNotice: (id) => get().preEventNotices?.find((x) => x.id === id),
+    rsvpByToken: (token) => get().rsvpResponses?.find((x) => x.token === token),
   },
 }));

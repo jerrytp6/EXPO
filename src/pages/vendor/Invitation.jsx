@@ -16,7 +16,7 @@ export default function VendorInvitation() {
   // 步驟：open / verify / confirm / done
   const [step, setStep] = useState("open");
   const [taxIdInput, setTaxIdInput] = useState("");
-  const [form, setForm] = useState({ contact: "", title: "", phone: "", email: "" });
+  const [form, setForm] = useState({ contact: "", title: "", phone: "", email: "", preferredBoothTypeId: "" });
 
   useEffect(() => {
     if (invitation) markVendorClicked(invitation.vendorId);
@@ -68,6 +68,7 @@ export default function VendorInvitation() {
       title: form.title,
       phone: form.phone,
       email: form.email,
+      preferredBoothTypeId: form.preferredBoothTypeId || null,
     });
     toast.success("報名成功！");
     setStep("done");
@@ -185,6 +186,30 @@ export default function VendorInvitation() {
                 </div>
               ))}
             </div>
+
+            {/* 攤位意願 */}
+            {event?.boothTypes?.length > 0 && (
+              <div className="mb-4">
+                <label className="block text-[12px] font-display font-semibold uppercase tracking-wider mb-2"
+                  style={{ color: "var(--text-tertiary)" }}>期望攤位類型</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl text-[14px] outline-none"
+                  style={{ background: "var(--bg-tinted)", border: "1px solid var(--separator)" }}
+                  value={form.preferredBoothTypeId}
+                  onChange={(e) => setForm({ ...form, preferredBoothTypeId: e.target.value })}
+                >
+                  <option value="">請選擇（選填）</option>
+                  {event.boothTypes.map((bt) => (
+                    <option key={bt.id} value={bt.id}>
+                      {bt.name} · {bt.size} · NT$ {bt.price.toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+                <div className="text-[11px] mt-1.5" style={{ color: "var(--text-tertiary)" }}>
+                  此為意願登記，實際攤位由主辦方統一分配。
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-2 mt-4">
               <button className="btn btn-primary" onClick={submit}>確認報名</button>

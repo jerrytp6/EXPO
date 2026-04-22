@@ -6,9 +6,8 @@ import { toast } from "../../store/toast";
 
 const STATUS = {
   planning: { label: "規劃中", cls: "badge-gray" },
+  recruiting: { label: "招商中", cls: "badge-orange" },
   preparing: { label: "籌備中", cls: "badge-blue" },
-  inviting: { label: "邀請中", cls: "badge-orange" },
-  live: { label: "進行中", cls: "badge-green" },
 };
 
 export default function CompanyEvents() {
