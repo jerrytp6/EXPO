@@ -6,6 +6,8 @@ import { Icon } from "../../components/Icon";
 import { toast } from "../../store/toast";
 import DecoratorDashboard from "./DecoratorDashboard";
 import DecoratorProject from "./DecoratorProject";
+import DecoratorNotices from "./DecoratorNotices";
+import DecoratorForms from "./DecoratorForms";
 
 const VERIFIED_KEY = "exhibition-os.portal-verified";
 
@@ -103,7 +105,9 @@ export default function DecoratorPortal() {
 
   const base = `/portal/decorator/${decoratorId}`;
   const menu = [
-    { to: base, label: "我的專案", icon: "activity", end: true },
+    { to: base,               label: "我的專案",   icon: "activity", end: true },
+    { to: `${base}/notices`,  label: "展覽須知",   icon: "document" },
+    { to: `${base}/forms`,    label: "表單代簽",   icon: "check" },
   ];
 
   return (
@@ -115,6 +119,8 @@ export default function DecoratorPortal() {
     >
       <Routes>
         <Route index element={<DecoratorDashboard decorator={decorator} />} />
+        <Route path="notices" element={<DecoratorNotices decorator={decorator} />} />
+        <Route path="forms" element={<DecoratorForms decorator={decorator} />} />
         <Route path="project/:projectId" element={<DecoratorProject decorator={decorator} />} />
       </Routes>
     </PortalLayout>

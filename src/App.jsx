@@ -5,6 +5,7 @@ import { ToastContainer } from "./components/Toast";
 
 import Login from "./pages/Login";
 import VendorInvitation from "./pages/vendor/Invitation";
+import VendorRsvp from "./pages/vendor/Rsvp";
 import DecoratorInvitation from "./pages/decor/Invitation";
 import VendorPortal from "./pages/portal/VendorPortal";
 import DecoratorPortal from "./pages/portal/DecoratorPortal";
@@ -39,6 +40,7 @@ import Forms from "./pages/event/Forms";
 import EquipmentCatalog from "./pages/event/EquipmentCatalog";
 import PreEventNotice from "./pages/event/PreEventNotice";
 import EventEmailTemplates from "./pages/event/EventEmailTemplates";
+import FormReview from "./pages/event/FormReview";
 
 function Home() {
   const user = useAuth((s) => s.user);
@@ -64,6 +66,7 @@ export default function App() {
 
         {/* 公開頁（無需登入） */}
         <Route path="/invite/:token" element={<VendorInvitation />} />
+        <Route path="/rsvp/:token" element={<VendorRsvp />} />
         <Route path="/decor-invite/:token" element={<DecoratorInvitation />} />
 
         {/* 廠商與裝潢公司後台（token-based 訪問） */}
@@ -97,6 +100,7 @@ export default function App() {
         <Route path="/event/:eventId/booths"                element={<Protected role="event-manager"><Booths /></Protected>} />
         <Route path="/event/:eventId/notices"               element={<Protected role="event-manager"><Notices /></Protected>} />
         <Route path="/event/:eventId/forms"                 element={<Protected role="event-manager"><Forms /></Protected>} />
+        <Route path="/event/:eventId/form-review"           element={<Protected role="event-manager"><FormReview /></Protected>} />
         <Route path="/event/:eventId/equipment"             element={<Protected role="event-manager"><EquipmentCatalog /></Protected>} />
         <Route path="/event/:eventId/pre-event"             element={<Protected role="event-manager"><PreEventNotice /></Protected>} />
         <Route path="/event/:eventId/email-templates"       element={<Protected role="event-manager"><EventEmailTemplates /></Protected>} />

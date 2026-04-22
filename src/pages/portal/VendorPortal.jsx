@@ -9,6 +9,10 @@ import VendorBooth from "./VendorBooth";
 import VendorProfile from "./VendorProfile";
 import VendorDecoration from "./VendorDecoration";
 import VendorSubmissions from "./VendorSubmissions";
+import VendorNotices from "./VendorNotices";
+import VendorForms from "./VendorForms";
+import VendorEquipment from "./VendorEquipment";
+import ChooseMode from "./ChooseMode";
 
 const VERIFIED_KEY = "exhibition-os.portal-verified";
 
@@ -116,14 +120,22 @@ export default function VendorPortal() {
     toast.success(`歡迎，${vendor.company}`);
   }
 
-  // ── 已驗證 → 正常後台 ──
+  // ── 驗證後：若尚未選擇裝潢方式，強制先進卡片選擇頁 ──
+  if (verified && !vendor.decorationMode) {
+    return <ChooseMode vendor={vendor} event={event} />;
+  }
+
+  // ── 已驗證且已選裝潢方式 → 正常後台 ──
   const base = `/portal/vendor/${vendorId}`;
   const menu = [
-    { to: base,                  label: "儀表板",   icon: "activity", end: true },
-    { to: `${base}/booth`,       label: "展位資訊", icon: "building" },
-    { to: `${base}/profile`,     label: "公司檔案", icon: "user" },
-    { to: `${base}/submissions`, label: "資料繳交", icon: "upload" },
-    { to: `${base}/decoration`,  label: "裝潢管理", icon: "sparkles" },
+    { to: base,                  label: "儀表板",       icon: "activity", end: true },
+    { to: `${base}/booth`,       label: "展位資訊",     icon: "building" },
+    { to: `${base}/notices`,     label: "文件須知",     icon: "document" },
+    { to: `${base}/forms`,       label: "表單簽署",     icon: "check" },
+    { to: `${base}/equipment`,   label: "設備申請",     icon: "package" },
+    { to: `${base}/profile`,     label: "公司檔案",     icon: "user" },
+    { to: `${base}/submissions`, label: "資料繳交",     icon: "upload" },
+    { to: `${base}/decoration`,  label: "裝潢管理",     icon: "sparkles" },
   ];
 
   return (
@@ -144,6 +156,9 @@ export default function VendorPortal() {
       <Routes>
         <Route index element={<VendorDashboard vendor={vendor} event={event} />} />
         <Route path="booth" element={<VendorBooth vendor={vendor} event={event} />} />
+        <Route path="notices" element={<VendorNotices vendor={vendor} event={event} />} />
+        <Route path="forms" element={<VendorForms vendor={vendor} event={event} />} />
+        <Route path="equipment" element={<VendorEquipment vendor={vendor} event={event} />} />
         <Route path="profile" element={<VendorProfile vendor={vendor} />} />
         <Route path="submissions" element={<VendorSubmissions vendor={vendor} event={event} />} />
         <Route path="decoration/*" element={<VendorDecoration vendor={vendor} event={event} />} />
