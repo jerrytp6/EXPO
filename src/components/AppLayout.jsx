@@ -103,8 +103,10 @@ export function AppLayout({ children }) {
 
   const handleLogout = () => {
     logout();
+    // 同步清除 Portal SSO 認證狀態 → 回 Portal 登入頁
+    localStorage.removeItem("portal-mock-user");
     toast.info("已登出");
-    navigate("/login", { replace: true });
+    navigate("/portal-login", { replace: true });
   };
 
   return (
