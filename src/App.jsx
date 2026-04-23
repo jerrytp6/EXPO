@@ -4,6 +4,7 @@ import { AppLayout } from "./components/AppLayout";
 import { ToastContainer } from "./components/Toast";
 
 import Login from "./pages/Login";
+import PortalLogin from "./pages/PortalLogin";
 import PortalHome from "./pages/PortalHome";
 import SsoReceiver from "./pages/SsoReceiver";
 import VendorInvitation from "./pages/vendor/Invitation";
@@ -67,7 +68,8 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Mock Portal SSO 入口（模擬客戶的統一認證平台首頁）*/}
+        {/* Mock Portal SSO 入口（模擬客戶的統一認證平台） */}
+        <Route path="/portal-login" element={<PortalLogin />} />
         <Route path="/portal" element={<PortalHome />} />
         <Route path="/sso" element={<SsoReceiver />} />
 

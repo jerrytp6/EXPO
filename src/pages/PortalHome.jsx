@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, Navigate } from "react-router-dom";
 import { useData } from "../store/data";
 import { ROLE_NAMES } from "../store/auth";
 import { Icon } from "../components/Icon";
@@ -26,22 +26,17 @@ export default function PortalHome() {
     return () => clearInterval(t);
   }, []);
 
-  // 使用者切換器（僅屬於 company-admin / event-manager / member 的使用者會顯示在 Portal；
-  // super-admin 也可選，代表 EX 維運）
-  const loggableUsers = useMemo(() => {
-    return users.filter((u) => u.email);
-  }, [users]);
-
-  const [currentUserId, setCurrentUserId] = useState(() => {
-    const saved = localStorage.getItem("portal-mock-user");
-    return saved || "u-ca-1"; // 預設 ming 公司管理員
-  });
-  const currentUser = loggableUsers.find((u) => u.id === currentUserId) || loggableUsers[0];
+  // 從 Portal 認證 state 讀取當前使用者
+  const currentUserId = localStorage.getItem("portal-mock-user");
+  const currentUser = users.find((u) => u.id === currentUserId);
   const currentCompany = companies.find((c) => c.id === currentUser?.companyId);
 
-  const pickUser = (id) => {
-    setCurrentUserId(id);
-    localStorage.setItem("portal-mock-user", id);
+  // 未通過 Portal 認證 → 轉跳 SSO 登入畫面
+  if (!currentUser) return <Navigate to="/portal-login" replace />;
+
+  const logout = () => {
+    localStorage.removeItem("portal-mock-user");
+    navigate("/portal-login", { replace: true });
   };
 
   // 產生 mock SSO token（base64 encoded JSON payload）
@@ -109,27 +104,10 @@ export default function PortalHome() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* 使用者切換下拉 */}
-            <select
-              className="input !py-1.5 !px-3 !text-[13px] max-w-[280px]"
-              value={currentUserId}
-              onChange={(e) => pickUser(e.target.value)}
-              style={{ background: "transparent" }}
-            >
-              {loggableUsers.map((u) => {
-                const co = companies.find((c) => c.id === u.companyId);
-                return (
-                  <option key={u.id} value={u.id}>
-                    {co ? `${co.name.slice(0, 6)}…` : "平台"} · {u.name}（{ROLE_NAMES[u.role]}）
-                  </option>
-                );
-              })}
-            </select>
-
             <div className="text-right text-[13px]">
               <div className="font-semibold">{currentCompany?.name || "EX 維運"}</div>
               <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-                {currentUser ? ROLE_NAMES[currentUser.role] : "—"}
+                {currentUser.name} · {ROLE_NAMES[currentUser.role]}
               </div>
             </div>
 
@@ -137,8 +115,17 @@ export default function PortalHome() {
               className="w-10 h-10 rounded-full grid place-items-center text-white font-bold"
               style={{ background: "linear-gradient(135deg, #5e5ce6, #bf5af2)" }}
             >
-              {currentUser?.name[0] || "?"}
+              {currentUser.name[0]}
             </div>
+
+            <button
+              onClick={logout}
+              className="text-[12px] px-3 py-1.5 rounded-lg"
+              style={{ background: "rgba(0,0,0,0.05)", color: "var(--text-secondary)" }}
+              title="登出 Portal"
+            >
+              登出
+            </button>
           </div>
         </div>
 
@@ -193,12 +180,7 @@ export default function PortalHome() {
 
         {/* 底部提示 */}
         <div className="text-center mt-12 text-[12px]" style={{ color: "var(--text-tertiary)" }}>
-          <div>切換上方使用者下拉選單模擬不同角色 SSO 登入 · 點擊「廠商管理系統」卡片即以該身份進入 EX</div>
-          <div className="mt-2">
-            <a href="#/login" className="underline" style={{ color: "inherit" }}>
-              開發者快速登入（繞過 Portal）
-            </a>
-          </div>
+          <div>以「{currentUser.name}」身份登入中 · 點擊「廠商管理系統」卡片進入 EX</div>
         </div>
       </div>
     </div>
