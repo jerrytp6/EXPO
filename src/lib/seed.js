@@ -48,7 +48,7 @@ export const SEED = {
       id: "e-3", companyId: "c-1", name: "智慧製造週", type: "實體展覽",
       startDate: "2026-07-22", endDate: "2026-07-24", location: "高雄展覽館",
       description: "聚焦工業 4.0 與智慧工廠應用，涵蓋自動化、機器人、IIoT、預測性維護。",
-      managerId: "u-em-2", status: "recruiting", createdAt: "2026-03-20",
+      managerId: "u-em-1", status: "recruiting", createdAt: "2026-03-20",
       boothSelfSelectionEnabled: true,
       boothTypes: [
         { id: "bt-5", name: "標準攤位", size: "3x3m (9㎡)", price: 48000, capacity: 50, description: "含基本裝潢" },
