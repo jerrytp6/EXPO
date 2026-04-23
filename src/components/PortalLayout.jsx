@@ -13,9 +13,10 @@ export function PortalLayout({
   const navigate = useNavigate();
 
   useEffect(() => {
+    // vendor → 紫 · decorator → 橘粉；其他 fallback
     document.documentElement.setAttribute(
       "data-role",
-      brand.role === "vendor" ? "vendor" : "company-admin"
+      brand.role === "vendor" || brand.role === "decorator" ? brand.role : "company-admin"
     );
     return () => document.documentElement.removeAttribute("data-role");
   }, [brand.role]);
