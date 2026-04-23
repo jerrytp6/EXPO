@@ -1052,6 +1052,36 @@ export const useData = create((set, get) => ({
     set({ ...next });
   },
 
+  // ───── 租戶訂閱子系統（Portal 層管理）─────
+  toggleTenantSubsystem: (companyId, subsystemKey, enable) => {
+    const at = new Date().toISOString().slice(0, 10);
+    const next = db.write((d) => {
+      if (!d.tenantSubsystems) d.tenantSubsystems = [];
+      const existed = d.tenantSubsystems.find((x) => x.companyId === companyId && x.subsystemKey === subsystemKey);
+      if (enable && !existed) {
+        d.tenantSubsystems.push({
+          companyId,
+          subsystemKey,
+          activatedAt: at,
+          contractEnd: new Date(Date.now() + 365 * 86400 * 1000).toISOString().slice(0, 10),
+        });
+      } else if (!enable && existed) {
+        d.tenantSubsystems = d.tenantSubsystems.filter(
+          (x) => !(x.companyId === companyId && x.subsystemKey === subsystemKey)
+        );
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+  getTenantSubsystems: (companyId) => {
+    return (get().tenantSubsystems || []).filter((x) => x.companyId === companyId).map((x) => x.subsystemKey);
+  },
+  isSubsystemActiveForTenant: (companyId, subsystemKey) => {
+    if (!companyId) return false;
+    return !!(get().tenantSubsystems || []).find((x) => x.companyId === companyId && x.subsystemKey === subsystemKey);
+  },
+
   // ───── Tenant Guard（多租戶隔離 helper）─────
   // 傳入 user 與資源 companyId，判斷是否允許存取
   // super-admin 可跨租戶；其他角色必須 companyId 相符

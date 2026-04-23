@@ -36,9 +36,9 @@ export default function PortalLogin() {
   };
 
   const demoUsers = [
+    { id: "u-pa-1", label: "Portal 超管" },
     { id: "u-ca-1", label: "租戶管理員" },
     { id: "u-em-1", label: "活動管理員" },
-    { id: "u-sa-1", label: "平台維運" },
   ];
 
   return (

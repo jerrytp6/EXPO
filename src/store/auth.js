@@ -63,15 +63,17 @@ export const useAuth = create((set) => ({
 }));
 
 export const ROLE_NAMES = {
-  "super-admin": "超級管理員",
-  "company-admin": "公司管理者",
-  "event-manager": "活動管理者",
-  member: "公司成員",
+  "portal-admin": "Portal 超級管理員",
+  "super-admin":  "EX 系統維運",
+  "company-admin": "租戶管理員",
+  "event-manager": "活動管理員",
+  member:          "租戶成員",
 };
 
 export const ROLE_HOME = {
-  "super-admin": "/admin",
+  "portal-admin":  "/portal/admin",
+  "super-admin":   "/admin",
   "company-admin": "/company",
   "event-manager": "/event",
-  member: "/company",
+  member:          "/company",
 };

@@ -1,7 +1,7 @@
 // LocalStorage-based mock database
 import { SEED } from "./seed";
 
-const KEY = "exhibition-os.db.v14";
+const KEY = "exhibition-os.db.v15";
 
 function load() {
   try {

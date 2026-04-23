@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth, ROLE_HOME } from "./store/auth";
+import { useData } from "./store/data";
 import { AppLayout } from "./components/AppLayout";
 import { ToastContainer } from "./components/Toast";
 
@@ -7,6 +8,11 @@ import Login from "./pages/Login";
 import PortalLogin from "./pages/PortalLogin";
 import PortalHome from "./pages/PortalHome";
 import SsoReceiver from "./pages/SsoReceiver";
+import { PortalAdminLayout } from "./components/PortalAdminLayout";
+import PortalAdminDashboard from "./pages/portal-admin/Dashboard";
+import PortalTenants from "./pages/portal-admin/Tenants";
+import PortalAccounts from "./pages/portal-admin/Accounts";
+import PortalSubsystems from "./pages/portal-admin/Subsystems";
 import VendorInvitation from "./pages/vendor/Invitation";
 import VendorRsvp from "./pages/vendor/Rsvp";
 import DecoratorInvitation from "./pages/decor/Invitation";
@@ -61,6 +67,16 @@ function Protected({ children, role }) {
   return <AppLayout>{children}</AppLayout>;
 }
 
+// Portal 管理後台守門：只有 Portal 認證為 portal-admin 可進入
+function PortalAdminGuard({ children }) {
+  const currentUserId = typeof window !== "undefined" ? localStorage.getItem("portal-mock-user") : null;
+  const users = useData.getState().users;
+  const user = users.find((u) => u.id === currentUserId);
+  if (!user) return <Navigate to="/portal-login" replace />;
+  if (user.role !== "portal-admin") return <Navigate to="/portal" replace />;
+  return <PortalAdminLayout>{children}</PortalAdminLayout>;
+}
+
 export default function App() {
   return (
     <HashRouter>
@@ -72,6 +88,12 @@ export default function App() {
         <Route path="/portal-login" element={<PortalLogin />} />
         <Route path="/portal" element={<PortalHome />} />
         <Route path="/sso" element={<SsoReceiver />} />
+
+        {/* Portal 管理後台（portal-admin 專屬） */}
+        <Route path="/portal/admin"            element={<PortalAdminGuard><PortalAdminDashboard /></PortalAdminGuard>} />
+        <Route path="/portal/admin/tenants"    element={<PortalAdminGuard><PortalTenants /></PortalAdminGuard>} />
+        <Route path="/portal/admin/accounts"   element={<PortalAdminGuard><PortalAccounts /></PortalAdminGuard>} />
+        <Route path="/portal/admin/subsystems" element={<PortalAdminGuard><PortalSubsystems /></PortalAdminGuard>} />
 
         {/* 公開頁（無需登入） */}
         <Route path="/invite/:token" element={<VendorInvitation />} />

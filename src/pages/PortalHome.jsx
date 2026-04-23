@@ -5,19 +5,18 @@ import { ROLE_NAMES } from "../store/auth";
 import { Icon } from "../components/Icon";
 
 // Mock Portal SSO 統一認證平台首頁（對應客戶架構圖）
-// SSO 登入後進到這頁 → 點「廠商管理系統」卡片 → 帶 token 跳進 EX
-// 其他子系統（CSM / 打卡 / 商機）為 placeholder
+// SSO 登入後進到這頁 → 依租戶訂閱顯示 active 卡片 → 點擊進入對應子系統
+// 目前僅「廠商管理系統」有實作（EX），其他卡片僅 placeholder
 const SUBSYSTEMS = [
-  { key: "csm",        name: "會議秘書系統",     status: "disabled", icon: "calendar", color: "#ff9f0a" },
-  { key: "ex",         name: "廠商管理系統",     status: "active",   icon: "package",  color: "#5e5ce6" },
-  { key: "punch",      name: "工讀生打卡系統",    status: "disabled", icon: "package",  color: "#8e8e93" },
-  { key: "opportunity",name: "商機管理系統",     status: "disabled", icon: "package",  color: "#30d158" },
-  { key: "settings",   name: "系統設定",          status: "disabled", icon: "settings", color: "#6e6e73" },
+  { key: "csm",         name: "會議秘書系統",     icon: "calendar", color: "#ff9f0a" },
+  { key: "ex",          name: "廠商管理系統",     icon: "package",  color: "#5e5ce6", linkable: true },
+  { key: "punch",       name: "工讀生打卡系統",   icon: "package",  color: "#8e8e93" },
+  { key: "opportunity", name: "商機管理系統",     icon: "package",  color: "#30d158" },
 ];
 
 export default function PortalHome() {
   const navigate = useNavigate();
-  const { users, companies } = useData();
+  const { users, companies, tenantSubsystems } = useData();
   const [now, setNow] = useState(new Date());
 
   // 每分鐘更新時鐘
@@ -33,6 +32,13 @@ export default function PortalHome() {
 
   // 未通過 Portal 認證 → 轉跳 SSO 登入畫面
   if (!currentUser) return <Navigate to="/portal-login" replace />;
+
+  // 當前租戶已訂閱的子系統 keys
+  const subscribedKeys = (tenantSubsystems || [])
+    .filter((x) => x.companyId === currentUser.companyId)
+    .map((x) => x.subsystemKey);
+  // portal-admin 或 super-admin 可看所有子系統（預覽用途）
+  const seesAll = currentUser.role === "portal-admin" || currentUser.role === "super-admin";
 
   const logout = () => {
     localStorage.removeItem("portal-mock-user");
@@ -60,8 +66,13 @@ export default function PortalHome() {
   };
 
   const clickSubsystem = (sub) => {
-    if (sub.status === "disabled") {
-      alert(`${sub.name} 尚未上線（此為 EX 展覽系統 Demo）`);
+    const subscribed = subscribedKeys.includes(sub.key) || seesAll;
+    if (!subscribed) {
+      alert(`您的租戶尚未訂閱「${sub.name}」，請聯繫 Portal 管理員開通`);
+      return;
+    }
+    if (!sub.linkable) {
+      alert(`${sub.name} 為子系統示範版，未實作完整登入流程（此 Demo 僅 EX 可用）`);
       return;
     }
     if (sub.key === "ex") enterEx();
@@ -129,58 +140,98 @@ export default function PortalHome() {
           </div>
         </div>
 
-        {/* 子系統卡片網格 */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-[1080px] mx-auto">
-          {SUBSYSTEMS.map((sub) => (
+        {/* portal-admin 專屬：Portal 管理入口 */}
+        {currentUser.role === "portal-admin" && (
+          <div className="max-w-[1080px] mx-auto mb-8">
             <button
-              key={sub.key}
-              onClick={() => clickSubsystem(sub)}
-              className="p-8 rounded-3xl transition-all"
+              onClick={() => navigate("/portal/admin")}
+              className="w-full p-6 rounded-3xl text-left transition-all flex items-center gap-5 hover:shadow-lg"
               style={{
-                background: "white",
-                border: sub.status === "active" ? "2px solid #5e5ce6" : "1px solid var(--separator)",
-                boxShadow: sub.status === "active" ? "0 20px 60px rgba(94,92,230,0.15)" : "var(--shadow-sm)",
-                cursor: sub.status === "disabled" ? "not-allowed" : "pointer",
-                opacity: sub.status === "disabled" ? 0.6 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (sub.status === "active") e.currentTarget.style.transform = "translateY(-4px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "none";
+                background: "linear-gradient(135deg, #1d1d1f 0%, #48484a 100%)",
+                color: "white",
               }}
             >
-              <div
-                className="w-20 h-20 rounded-2xl grid place-items-center mx-auto mb-4"
+              <div className="w-14 h-14 rounded-2xl grid place-items-center"
+                style={{ background: "rgba(255,255,255,0.15)" }}>
+                <Icon name="shield" className="icon" />
+                <style>{`button .w-14 .icon { stroke: white; width: 28px; height: 28px; }`}</style>
+              </div>
+              <div className="flex-1">
+                <div className="text-[11px] font-semibold uppercase tracking-widest opacity-70 mb-1">
+                  PORTAL ADMIN · 僅平台管理員可見
+                </div>
+                <div className="text-[20px] font-bold">進入 Portal 管理後台</div>
+                <div className="text-[13px] opacity-80 mt-1">租戶管理 · 帳號管理 · 子系統訂閱管理</div>
+              </div>
+              <Icon name="arrow_right" className="icon w-6 h-6" />
+            </button>
+          </div>
+        )}
+
+        {/* 子系統卡片網格 */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-[1080px] mx-auto">
+          {SUBSYSTEMS.map((sub) => {
+            const subscribed = subscribedKeys.includes(sub.key) || seesAll;
+            const isLinkable = sub.linkable && subscribed;
+            return (
+              <button
+                key={sub.key}
+                onClick={() => clickSubsystem(sub)}
+                className="p-8 rounded-3xl transition-all"
                 style={{
-                  background: sub.status === "active"
-                    ? `linear-gradient(135deg, ${sub.color}, #bf5af2)`
-                    : "rgba(0,0,0,0.04)",
+                  background: "white",
+                  border: isLinkable ? "2px solid #5e5ce6" : "1px solid var(--separator)",
+                  boxShadow: isLinkable ? "0 20px 60px rgba(94,92,230,0.15)" : "var(--shadow-sm)",
+                  cursor: subscribed ? "pointer" : "not-allowed",
+                  opacity: subscribed ? 1 : 0.55,
+                }}
+                onMouseEnter={(e) => {
+                  if (isLinkable) e.currentTarget.style.transform = "translateY(-4px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "none";
                 }}
               >
-                <Icon name={sub.icon} className="icon" />
-                <style>{`button .w-20 .icon { stroke: ${sub.status === "active" ? "white" : sub.color}; width: 36px; height: 36px; stroke-width: 1.5; }`}</style>
-              </div>
-              <div className="text-center">
-                <div className="font-bold text-[16px]">{sub.name}</div>
-                {sub.status === "active" && (
-                  <div className="text-[11px] mt-1.5" style={{ color: "#5e5ce6" }}>
-                    ● 進入系統
-                  </div>
-                )}
-                {sub.status === "disabled" && (
-                  <div className="text-[11px] mt-1.5" style={{ color: "var(--text-tertiary)" }}>
-                    尚未上線
-                  </div>
-                )}
-              </div>
-            </button>
-          ))}
+                <div
+                  className="w-20 h-20 rounded-2xl grid place-items-center mx-auto mb-4"
+                  style={{
+                    background: subscribed
+                      ? `linear-gradient(135deg, ${sub.color}, #bf5af2)`
+                      : "rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <Icon name={sub.icon} className="icon" />
+                  <style>{`button .w-20 .icon { stroke: ${subscribed ? "white" : sub.color}; width: 36px; height: 36px; stroke-width: 1.5; }`}</style>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-[16px]">{sub.name}</div>
+                  {isLinkable && (
+                    <div className="text-[11px] mt-1.5" style={{ color: "#5e5ce6" }}>
+                      ● 進入系統
+                    </div>
+                  )}
+                  {subscribed && !sub.linkable && (
+                    <div className="text-[11px] mt-1.5" style={{ color: "var(--text-tertiary)" }}>
+                      Demo 未實作
+                    </div>
+                  )}
+                  {!subscribed && (
+                    <div className="text-[11px] mt-1.5" style={{ color: "var(--text-tertiary)" }}>
+                      未訂閱
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* 底部提示 */}
         <div className="text-center mt-12 text-[12px]" style={{ color: "var(--text-tertiary)" }}>
-          <div>以「{currentUser.name}」身份登入中 · 點擊「廠商管理系統」卡片進入 EX</div>
+          <div>以「{currentUser.name}」身份登入中 · 訂閱狀態依租戶「{currentCompany?.name || "無"}」而定</div>
+          {seesAll && (
+            <div className="mt-1">（{ROLE_NAMES[currentUser.role]} 身份可預覽全部子系統）</div>
+          )}
         </div>
       </div>
     </div>

@@ -6,7 +6,8 @@
 //      - formSubmissions / equipmentRequests 各階段樣本
 export const SEED = {
   users: [
-    { id: "u-sa-1", email: "admin@exhibitos.com",       name: "平台管理員", role: "super-admin",   companyId: null,    title: "EX 系統維運" },
+    { id: "u-pa-1", email: "portal@exhibitos.com",       name: "Portal 超管", role: "portal-admin", companyId: null,    title: "展會營運平台 · 業務管理" },
+    { id: "u-sa-1", email: "admin@exhibitos.com",       name: "平台維運",    role: "super-admin",   companyId: null,    title: "EX 系統技術維運" },
     { id: "u-ca-1", email: "ming@agcnet.com.tw",         name: "陳小明",     role: "company-admin", companyId: "c-1",  title: "資訊長 CIO" },
     { id: "u-em-1", email: "yating@agcnet.com.tw",       name: "林雅婷",     role: "event-manager", companyId: "c-1",  title: "行銷部主任" },
     { id: "u-em-2", email: "wenhao@agcnet.com.tw",       name: "張文豪",     role: "event-manager", companyId: "c-1",  title: "業務經理" },
@@ -19,6 +20,16 @@ export const SEED = {
     { id: "c-1", name: "群揚資通股份有限公司", taxId: "12345678", industry: "資訊服務業", size: "100–500 人", address: "台北市內湖區瑞光路 168 號", phone: "02-2345-6789", adminUserId: "u-ca-1", status: "active", createdAt: "2026-01-15" },
     { id: "c-2", name: "米兒設計有限公司", taxId: "55667788", industry: "設計服務業", size: "10–50 人", address: "台北市大安區忠孝東路四段 100 號", phone: "02-2700-1234", adminUserId: null, status: "pending", createdAt: "2026-04-07" },
     { id: "c-3", name: "天藍科技有限公司", taxId: "99887766", industry: "電子製造業", size: "50–100 人", address: "新竹市東區光復路二段 101 號", phone: "03-5712-3456", adminUserId: null, status: "pending", createdAt: "2026-04-06" },
+  ],
+
+  // 子系統訂閱（Portal 層）— 存在於此表即表示該租戶已開通該子系統
+  // subsystemKey: csm / ex / punch / opportunity
+  tenantSubsystems: [
+    { companyId: "c-1", subsystemKey: "csm",         activatedAt: "2026-01-15", contractEnd: "2027-01-15" },
+    { companyId: "c-1", subsystemKey: "ex",          activatedAt: "2026-01-15", contractEnd: "2027-01-15" },
+    { companyId: "c-1", subsystemKey: "opportunity", activatedAt: "2026-02-10", contractEnd: "2027-02-10" },
+    { companyId: "c-3", subsystemKey: "ex",          activatedAt: "2026-03-20", contractEnd: "2027-03-20" },
+    { companyId: "c-3", subsystemKey: "punch",       activatedAt: "2026-03-25", contractEnd: "2027-03-25" },
   ],
   events: [
     {
