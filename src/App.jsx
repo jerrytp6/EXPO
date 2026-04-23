@@ -4,6 +4,8 @@ import { AppLayout } from "./components/AppLayout";
 import { ToastContainer } from "./components/Toast";
 
 import Login from "./pages/Login";
+import PortalHome from "./pages/PortalHome";
+import SsoReceiver from "./pages/SsoReceiver";
 import VendorInvitation from "./pages/vendor/Invitation";
 import VendorRsvp from "./pages/vendor/Rsvp";
 import DecoratorInvitation from "./pages/decor/Invitation";
@@ -44,8 +46,9 @@ import FormReview from "./pages/event/FormReview";
 
 function Home() {
   const user = useAuth((s) => s.user);
-  if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={ROLE_HOME[user.role] || "/login"} replace />;
+  // 未登入 → 導向 Mock Portal（模擬客戶的 SSO 入口）
+  if (!user) return <Navigate to="/portal" replace />;
+  return <Navigate to={ROLE_HOME[user.role] || "/portal"} replace />;
 }
 
 function Protected({ children, role }) {
@@ -63,6 +66,10 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+
+        {/* Mock Portal SSO 入口（模擬客戶的統一認證平台首頁）*/}
+        <Route path="/portal" element={<PortalHome />} />
+        <Route path="/sso" element={<SsoReceiver />} />
 
         {/* 公開頁（無需登入） */}
         <Route path="/invite/:token" element={<VendorInvitation />} />

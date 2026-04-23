@@ -77,6 +77,32 @@ export default function Login() {
             輸入 Email 或選擇下方測試帳號快速體驗
           </p>
 
+          {/* Portal SSO 入口（正式使用路徑）*/}
+          <Link
+            to="/portal"
+            className="w-full flex items-center gap-3 p-4 rounded-xl text-white font-medium mb-5 no-underline transition-all"
+            style={{ background: "linear-gradient(135deg, #30d158, #0bb850)", boxShadow: "0 8px 24px rgba(48,209,88,0.25)" }}
+          >
+            <div className="w-10 h-10 rounded-lg grid place-items-center"
+              style={{ background: "rgba(255,255,255,0.2)" }}>
+              <Icon name="shield" />
+              <style>{`a[href="#/portal"] .grid .icon { stroke: white; }`}</style>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-[15px]">從展會營運平台登入</div>
+              <div className="text-[12px] opacity-90">Portal SSO · 正式整合路徑</div>
+            </div>
+            <Icon name="arrow_right" className="icon w-5 h-5" />
+          </Link>
+
+          <div className="flex items-center gap-3 my-6">
+            <div className="flex-1 h-px" style={{ background: "var(--separator)" }} />
+            <span className="text-[11px] font-display uppercase tracking-widest" style={{ color: "var(--text-tertiary)" }}>
+              開發者快速登入
+            </span>
+            <div className="flex-1 h-px" style={{ background: "var(--separator)" }} />
+          </div>
+
           <form onSubmit={submit}>
             <label className="block text-[12px] font-display font-semibold uppercase tracking-wider mb-2"
               style={{ color: "var(--text-tertiary)" }}>
@@ -96,15 +122,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px" style={{ background: "var(--separator)" }} />
-            <span className="text-[11px] font-display uppercase tracking-widest" style={{ color: "var(--text-tertiary)" }}>
-              快速登入
-            </span>
-            <div className="flex-1 h-px" style={{ background: "var(--separator)" }} />
-          </div>
-
-          <div className="space-y-2">
+          <div className="space-y-2 mt-5">
             {demoUsers.map(({ id, color }) => {
               const u = users.find((x) => x.id === id);
               if (!u) return null;
