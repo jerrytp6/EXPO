@@ -98,7 +98,7 @@ export function AppLayout({ children }) {
   }, [cfg]);
 
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/portal-login" replace state={{ from: location.pathname }} />;
   }
 
   const handleLogout = () => {

@@ -54,7 +54,7 @@ function Home() {
 
 function Protected({ children, role }) {
   const user = useAuth((s) => s.user);
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/portal-login" replace />;
   if (role && user.role !== role && !(role === "company-admin" && user.role === "member")) {
     return <Navigate to={ROLE_HOME[user.role]} replace />;
   }
