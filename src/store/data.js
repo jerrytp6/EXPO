@@ -178,6 +178,48 @@ export const useData = create((set, get) => ({
       if (v) {
         v.boothTypeId = boothTypeId;
         v.boothNumber = boothNumber;
+        v.boothSelectionStatus = boothTypeId && boothNumber ? "confirmed" : null;
+        v.boothSelectedBy = boothTypeId && boothNumber ? "admin" : null;
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+
+  // 廠商自選攤位（提交後進入待確認狀態）
+  vendorSelectBooth: (vendorId, boothTypeId, boothNumber) => {
+    const next = db.write((d) => {
+      const v = d.vendors.find((x) => x.id === vendorId);
+      if (v) {
+        v.boothTypeId = boothTypeId;
+        v.boothNumber = boothNumber;
+        v.boothSelectionStatus = "pending";
+        v.boothSelectedBy = "vendor";
+        v.boothSelectedAt = new Date().toISOString().slice(0, 10);
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+  confirmVendorBoothSelection: (vendorId) => {
+    const next = db.write((d) => {
+      const v = d.vendors.find((x) => x.id === vendorId);
+      if (v && v.boothSelectionStatus === "pending") {
+        v.boothSelectionStatus = "confirmed";
+      }
+      return d;
+    });
+    set({ ...next });
+  },
+  rejectVendorBoothSelection: (vendorId) => {
+    const next = db.write((d) => {
+      const v = d.vendors.find((x) => x.id === vendorId);
+      if (v && v.boothSelectionStatus === "pending") {
+        v.boothTypeId = null;
+        v.boothNumber = "";
+        v.boothSelectionStatus = null;
+        v.boothSelectedBy = null;
+        v.boothSelectedAt = null;
       }
       return d;
     });

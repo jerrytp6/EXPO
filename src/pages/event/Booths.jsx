@@ -10,11 +10,17 @@ const PAY_STATUS = { paid: { l: "已繳", c: "badge-green" }, unpaid: { l: "未�
 
 export default function Booths() {
   const { eventId } = useParams();
-  const { events, vendors, assignBooth, updatePaymentStatus } = useData();
+  const {
+    events, vendors,
+    assignBooth, updatePaymentStatus,
+    setBoothSelfSelection, confirmVendorBoothSelection, rejectVendorBoothSelection,
+  } = useData();
   const event = events.find((e) => e.id === eventId);
 
   const [editVendor, setEditVendor] = useState(null);
   const [form, setForm] = useState({ boothTypeId: "", boothNumber: "" });
+
+  const selfSelect = !!event?.boothSelfSelectionEnabled;
 
   if (!event) return <Navigate to="/event" replace />;
 
@@ -40,6 +46,20 @@ export default function Booths() {
     updatePaymentStatus(vendorId, field, current === "paid" ? "unpaid" : "paid");
   };
 
+  const toggleSelfSelect = () => {
+    setBoothSelfSelection(eventId, !selfSelect);
+    toast.success(`已切換為「${!selfSelect ? "廠商自選" : "管理員分配"}」模式`);
+  };
+  const confirmSelection = (v) => {
+    confirmVendorBoothSelection(v.id);
+    toast.success(`已確認 ${v.company} 的攤位選擇`);
+  };
+  const rejectSelection = (v) => {
+    if (!confirm(`確定退回 ${v.company} 的攤位選擇？廠商將需要重新挑選。`)) return;
+    rejectVendorBoothSelection(v.id);
+    toast.info(`已退回 ${v.company} 的攤位選擇`);
+  };
+
   const assigned = confirmed.filter((v) => v.boothNumber);
   const totalRevenue = confirmed.reduce((sum, v) => sum + (getBt(v.boothTypeId)?.price || 0), 0);
   const collectedDeposit = confirmed.filter((v) => v.depositStatus === "paid").reduce((sum, v) => sum + Math.round((getBt(v.boothTypeId)?.price || 0) * 0.5), 0);
@@ -51,6 +71,29 @@ export default function Booths() {
         title="攤位分配與繳費"
         desc="為已確認參展的廠商分配攤位並追蹤繳費狀態。"
       />
+
+      {/* 分配模式切換 — PPT slide 10「設定開關」 */}
+      <div className="panel mb-6 flex items-center justify-between flex-wrap gap-3" style={{ padding: "16px 20px" }}>
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--text-tertiary)" }}>
+            BOOTH ALLOCATION MODE
+          </div>
+          <div className="text-[14px]">
+            目前模式：
+            <span className={`chip ml-2 ${selfSelect ? "chip-purple" : "chip-blue"}`}>
+              {selfSelect ? "廠商自選" : "管理員分配"}
+            </span>
+            <span className="text-[12px] ml-3" style={{ color: "var(--text-tertiary)" }}>
+              {selfSelect
+                ? "廠商可在後台自行挑選攤位類型與編號，提交後由您確認。"
+                : "由您直接為各廠商分配攤位；廠商端僅顯示分配結果。"}
+            </span>
+          </div>
+        </div>
+        <button className="btn" onClick={toggleSelfSelect}>
+          切換為「{selfSelect ? "管理員分配" : "廠商自選"}」
+        </button>
+      </div>
 
       <StatGrid
         stats={[
@@ -125,6 +168,7 @@ export default function Booths() {
               const balance = price - deposit;
               const dep = v.depositStatus ? PAY_STATUS[v.depositStatus] : null;
               const bal = v.balanceStatus ? PAY_STATUS[v.balanceStatus] : null;
+              const isPending = v.boothSelectionStatus === "pending";
               return (
                 <DataRow
                   key={v.id}
@@ -138,7 +182,15 @@ export default function Booths() {
                       ),
                       w: "2fr",
                     },
-                    { content: bt ? <span className="badge badge-blue">{bt.name}</span> : <span style={{ color: "var(--text-tertiary)" }}>未分配</span>, w: "1.2fr" },
+                    {
+                      content: bt ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="badge badge-blue">{bt.name}</span>
+                          {isPending && <span className="chip chip-orange">廠商自選待確認</span>}
+                        </div>
+                      ) : <span style={{ color: "var(--text-tertiary)" }}>未分配</span>,
+                      w: "1.2fr",
+                    },
                     { content: <span className="font-display font-medium">{v.boothNumber || "—"}</span>, w: "0.7fr" },
                     { content: bt ? <span className="font-display text-[12px]">NT$ {price.toLocaleString()}</span> : "—", w: "1fr" },
                     {
@@ -168,7 +220,12 @@ export default function Booths() {
                       w: "1fr",
                     },
                     {
-                      content: (
+                      content: isPending ? (
+                        <div className="flex gap-1">
+                          <button className="btn btn-ghost !py-1 !text-xs" onClick={() => confirmSelection(v)} style={{ color: "var(--green)" }}>確認</button>
+                          <button className="btn btn-ghost !py-1 !text-xs" onClick={() => rejectSelection(v)} style={{ color: "var(--red)" }}>退回</button>
+                        </div>
+                      ) : (
                         <button className="btn btn-ghost !py-1 !text-xs" onClick={() => openAssign(v)}>
                           {v.boothNumber ? "修改" : "分配"}
                         </button>
