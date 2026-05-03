@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useData } from "../../store/data";
 import { SceneHead, Panel, Field } from "../../components/Scene";
 import { Modal } from "../../components/Modal";
@@ -30,9 +30,11 @@ export default function VendorDecoration({ vendor, event }) {
     inviteDecorator,
     reviewDesign,
     sendMessage,
+    loadProjectMedia,
   } = useData();
 
   const project = decorationProjects.find((p) => p.vendorId === vendor.id);
+  useEffect(() => { if (project?.id) loadProjectMedia(project.id); }, [project?.id]);
   const decorator = project ? decorators.find((d) => d.id === project.decoratorId) : null;
   const projectDesigns = project ? designs.filter((d) => d.projectId === project.id) : [];
   const projectMessages = project

@@ -154,6 +154,50 @@ settingsRouter.delete("/document-templates/:id", requireRole("company-admin", "e
   } catch (err) { next(err); }
 });
 
+// ───── Event Documents（活動 ↔ 預設文件範本 join）─────
+
+settingsRouter.get("/event-documents", async (req, res, next) => {
+  try {
+    const where = { ...scopeWhere(req), ...(req.query.eventId ? { eventId: req.query.eventId } : {}) };
+    const items = await prisma.eventDocument.findMany({ where });
+    res.json(items);
+  } catch (err) { next(err); }
+});
+
+settingsRouter.put("/event-documents/:eventId/:templateId", requireRole("company-admin", "event-manager"), async (req, res, next) => {
+  try {
+    const tenantId = requireWriteTenant(req);
+    const body = z.object({
+      required: z.boolean().optional(),
+      deadline: z.string().nullish(),
+    }).parse(req.body);
+    const item = await prisma.eventDocument.upsert({
+      where: { eventId_templateId: { eventId: req.params.eventId, templateId: req.params.templateId } },
+      update: {
+        ...(body.required !== undefined ? { required: body.required } : {}),
+        deadline: body.deadline ? new Date(body.deadline) : null,
+      },
+      create: {
+        eventId: req.params.eventId,
+        templateId: req.params.templateId,
+        tenantId,
+        required: body.required ?? true,
+        deadline: body.deadline ? new Date(body.deadline) : null,
+      },
+    });
+    res.json(item);
+  } catch (err) { next(err); }
+});
+
+settingsRouter.delete("/event-documents/:eventId/:templateId", requireRole("company-admin", "event-manager"), async (req, res, next) => {
+  try {
+    await prisma.eventDocument.delete({
+      where: { eventId_templateId: { eventId: req.params.eventId, templateId: req.params.templateId } },
+    }).catch(() => null);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 // ───── Pre-Event Notices（展前通知）─────
 
 const preEventSchema = z.object({

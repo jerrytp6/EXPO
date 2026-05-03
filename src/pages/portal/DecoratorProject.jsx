@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useData } from "../../store/data";
 import { SceneHead, Panel, Field } from "../../components/Scene";
@@ -33,7 +33,10 @@ export default function DecoratorProject({ decorator }) {
     uploadDesign,
     sendMessage,
     updateProject,
+    loadProjectMedia,
   } = useData();
+
+  useEffect(() => { if (projectId) loadProjectMedia(projectId); }, [projectId]);
 
   const project = decorationProjects.find((p) => p.id === projectId);
   if (!project) return <Navigate to={`/portal/decorator/${decoratorId}`} replace />;

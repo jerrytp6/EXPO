@@ -89,7 +89,7 @@ export const useData = create((set, get) => ({
         users, companies, subs, events, vendors, invitations, rsvps,
         notices, forms, formSubs, equipCatalog, equipReqs,
         decorators, projects, decorInvites,
-        emailTemplates, docTemplates, preEvents,
+        emailTemplates, docTemplates, preEvents, eventDocs,
       ] = await Promise.all([
         api.get("/users").catch(() => []),
         (isPortalAdmin || isSuper)
@@ -113,6 +113,7 @@ export const useData = create((set, get) => ({
         api.get("/settings/email-templates").catch(() => []),
         api.get("/settings/document-templates").catch(() => []),
         api.get("/settings/pre-event").catch(() => []),
+        api.get("/settings/event-documents").catch(() => []),
       ]);
 
       set({
@@ -137,6 +138,7 @@ export const useData = create((set, get) => ({
         emailTemplates,
         documentTemplates: docTemplates,
         preEventNotices: preEvents,
+        eventDocuments: eventDocs,
         bootstrapping: false,
       });
     } catch (err) {
@@ -467,46 +469,247 @@ export const useData = create((set, get) => ({
     set((s) => ({ equipmentRequests: s.equipmentRequests.map((x) => x.id === id ? req : x) }));
   },
 
-  // document templates（A4.4）
-  createDocTemplate: STUB("createDocTemplate"),
-  updateDocTemplate: STUB("updateDocTemplate"),
-  deleteDocTemplate: STUB("deleteDocTemplate"),
-  toggleEventDocument: STUB("toggleEventDocument"),
-  setEventDocDeadline: STUB("setEventDocDeadline"),
-  setEventDocRequired: STUB("setEventDocRequired"),
+  // ═════════════════════════════════════════════════════
+  // A4.4：document/email templates / smtp / pre-event / decorators / permissions
+  // ═════════════════════════════════════════════════════
 
-  // email templates（A4.4）
-  createEmailTemplate: STUB("createEmailTemplate"),
-  updateEmailTemplate: STUB("updateEmailTemplate"),
-  deleteEmailTemplate: STUB("deleteEmailTemplate"),
-  copyTenantTemplatesToEvent: STUB("copyTenantTemplatesToEvent"),
+  // ───── Document Templates ─────
+  createDocTemplate: async (payload) => {
+    const t = await api.post("/settings/document-templates", payload);
+    set((s) => ({ documentTemplates: [...s.documentTemplates, t] }));
+    return t;
+  },
+  updateDocTemplate: async (id, patch) => {
+    const t = await api.patch(`/settings/document-templates/${id}`, patch);
+    set((s) => ({ documentTemplates: s.documentTemplates.map((x) => x.id === id ? t : x) }));
+  },
+  deleteDocTemplate: async (id) => {
+    await api.delete(`/settings/document-templates/${id}`);
+    set((s) => ({ documentTemplates: s.documentTemplates.filter((x) => x.id !== id) }));
+  },
 
-  // smtp（A4.4）
-  updateSmtpSettings: STUB("updateSmtpSettings"),
-  testSmtpConnection: STUB("testSmtpConnection"),
+  // ───── Event Documents（活動採用哪些文件範本）─────
+  toggleEventDocument: async (eventId, templateId, enabled) => {
+    if (enabled) {
+      const ed = await api.put(`/settings/event-documents/${eventId}/${templateId}`, {});
+      set((s) => {
+        const exists = s.eventDocuments.some((x) => x.eventId === eventId && x.templateId === templateId);
+        return {
+          eventDocuments: exists
+            ? s.eventDocuments.map((x) => x.eventId === eventId && x.templateId === templateId ? ed : x)
+            : [...s.eventDocuments, ed],
+        };
+      });
+    } else {
+      await api.delete(`/settings/event-documents/${eventId}/${templateId}`);
+      set((s) => ({
+        eventDocuments: s.eventDocuments.filter((x) => !(x.eventId === eventId && x.templateId === templateId)),
+      }));
+    }
+  },
+  setEventDocDeadline: async (eventId, templateId, deadline) => {
+    const ed = await api.put(`/settings/event-documents/${eventId}/${templateId}`, { deadline });
+    set((s) => {
+      const exists = s.eventDocuments.some((x) => x.eventId === eventId && x.templateId === templateId);
+      return {
+        eventDocuments: exists
+          ? s.eventDocuments.map((x) => x.eventId === eventId && x.templateId === templateId ? ed : x)
+          : [...s.eventDocuments, ed],
+      };
+    });
+  },
+  setEventDocRequired: async (eventId, templateId, value) => {
+    if (value === null) {
+      // 重置為 template default — 移除 override
+      await api.delete(`/settings/event-documents/${eventId}/${templateId}`);
+      set((s) => ({
+        eventDocuments: s.eventDocuments.filter((x) => !(x.eventId === eventId && x.templateId === templateId)),
+      }));
+      return;
+    }
+    const ed = await api.put(`/settings/event-documents/${eventId}/${templateId}`, { required: value });
+    set((s) => {
+      const exists = s.eventDocuments.some((x) => x.eventId === eventId && x.templateId === templateId);
+      return {
+        eventDocuments: exists
+          ? s.eventDocuments.map((x) => x.eventId === eventId && x.templateId === templateId ? ed : x)
+          : [...s.eventDocuments, ed],
+      };
+    });
+  },
 
-  // pre-event（A4.4）
-  createPreEventNotice: STUB("createPreEventNotice"),
-  updatePreEventNotice: STUB("updatePreEventNotice"),
-  deletePreEventNotice: STUB("deletePreEventNotice"),
-  sendPreEventNotice: STUB("sendPreEventNotice"),
+  // ───── Email Templates ─────
+  createEmailTemplate: async (payload) => {
+    const t = await api.post("/settings/email-templates", payload);
+    set((s) => ({ emailTemplates: [...s.emailTemplates, t] }));
+    return t;
+  },
+  updateEmailTemplate: async (id, patch) => {
+    const t = await api.patch(`/settings/email-templates/${id}`, patch);
+    set((s) => ({ emailTemplates: s.emailTemplates.map((x) => x.id === id ? t : x) }));
+  },
+  deleteEmailTemplate: async (id) => {
+    await api.delete(`/settings/email-templates/${id}`);
+    set((s) => ({ emailTemplates: s.emailTemplates.filter((x) => x.id !== id) }));
+  },
+  copyTenantTemplatesToEvent: async (_companyId, eventId) => {
+    // 把 tenant scope 的 templates 全部複製成 event scope
+    const tenantTpls = get().emailTemplates.filter((t) => t.scope === "tenant");
+    const created = [];
+    for (const t of tenantTpls) {
+      const dup = await api.post("/settings/email-templates", {
+        scope: "event",
+        eventId,
+        trigger: t.trigger,
+        name: t.name,
+        subject: t.subject,
+        body: t.body,
+        isSystem: false,
+      });
+      created.push(dup);
+    }
+    set((s) => ({ emailTemplates: [...s.emailTemplates, ...created] }));
+    return created;
+  },
 
-  // decorators（A4.4）
-  createDecorator: STUB("createDecorator"),
-  updateDecorator: STUB("updateDecorator"),
-  deleteDecorator: STUB("deleteDecorator"),
-  createProject: STUB("createProject"),
-  updateProject: STUB("updateProject"),
-  uploadDesign: STUB("uploadDesign"),
-  reviewDesign: STUB("reviewDesign"),
-  sendMessage: STUB("sendMessage"),
-  sendDecoratorInvitation: STUB("sendDecoratorInvitation"),
+  // ───── SMTP Settings ─────
+  updateSmtpSettings: async (_companyId, payload) => {
+    const smtp = await api.put("/settings/smtp", payload);
+    set((s) => {
+      const exists = s.smtpSettings.some((x) => (x.tenantId || x.companyId) === smtp.tenantId);
+      return {
+        smtpSettings: exists
+          ? s.smtpSettings.map((x) => (x.tenantId || x.companyId) === smtp.tenantId ? smtp : x)
+          : [...s.smtpSettings, smtp],
+      };
+    });
+  },
+  testSmtpConnection: async (_companyId) => {
+    try {
+      const r = await api.post("/settings/smtp/test");
+      set((s) => {
+        const tid = r.smtp.tenantId;
+        return {
+          smtpSettings: s.smtpSettings.some((x) => (x.tenantId || x.companyId) === tid)
+            ? s.smtpSettings.map((x) => (x.tenantId || x.companyId) === tid ? r.smtp : x)
+            : [...s.smtpSettings, r.smtp],
+        };
+      });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  },
 
-  // permissions（A4.4）
+  // ───── Pre-Event Notices ─────
+  createPreEventNotice: async (payload) => {
+    const p = await api.post("/settings/pre-event", payload);
+    set((s) => ({ preEventNotices: [...s.preEventNotices, p] }));
+    return p;
+  },
+  updatePreEventNotice: async (id, patch) => {
+    const p = await api.patch(`/settings/pre-event/${id}`, patch);
+    set((s) => ({ preEventNotices: s.preEventNotices.map((x) => x.id === id ? p : x) }));
+  },
+  deletePreEventNotice: async (id) => {
+    await api.delete(`/settings/pre-event/${id}`);
+    set((s) => ({ preEventNotices: s.preEventNotices.filter((x) => x.id !== id) }));
+  },
+  sendPreEventNotice: async (id) => {
+    const p = await api.post(`/settings/pre-event/${id}/send`);
+    set((s) => ({ preEventNotices: s.preEventNotices.map((x) => x.id === id ? p : x) }));
+  },
+
+  // ───── Decorators ─────
+  createDecorator: async (payload) => {
+    const d = await api.post("/decorators", payload);
+    set((s) => ({ decorators: [...s.decorators, d] }));
+    return d;
+  },
+  updateDecorator: async (id, patch) => {
+    const d = await api.patch(`/decorators/${id}`, patch);
+    set((s) => ({ decorators: s.decorators.map((x) => x.id === id ? d : x) }));
+  },
+  deleteDecorator: async (id) => {
+    await api.delete(`/decorators/${id}`);
+    set((s) => ({ decorators: s.decorators.filter((x) => x.id !== id) }));
+  },
+
+  // ───── Decoration Projects ─────
+  createProject: async (payload) => {
+    const p = await api.post("/decorators/projects", payload);
+    set((s) => ({ decorationProjects: [...s.decorationProjects, p] }));
+    return p;
+  },
+  updateProject: async (id, patch) => {
+    const p = await api.patch(`/decorators/projects/${id}`, patch);
+    set((s) => ({ decorationProjects: s.decorationProjects.map((x) => x.id === id ? p : x) }));
+  },
+
+  // 進入專案頁時呼叫，拉該專案的 designs + messages
+  loadProjectMedia: async (projectId) => {
+    const [designs, messages] = await Promise.all([
+      api.get(`/decorators/projects/${projectId}/designs`).catch(() => []),
+      api.get(`/decorators/projects/${projectId}/messages`).catch(() => []),
+    ]);
+    set((s) => ({
+      designs: [...s.designs.filter((d) => d.projectId !== projectId), ...designs],
+      messages: [...s.messages.filter((m) => m.projectId !== projectId), ...messages],
+    }));
+  },
+
+  // ───── Designs ─────
+  uploadDesign: async (projectId, payload) => {
+    const d = await api.post(`/decorators/projects/${projectId}/designs`, payload);
+    set((s) => ({ designs: [...s.designs, d] }));
+    return d;
+  },
+  reviewDesign: async (designId, status, feedback) => {
+    const d = await api.patch(`/decorators/designs/${designId}/review`, { status, feedback });
+    set((s) => ({ designs: s.designs.map((x) => x.id === designId ? d : x) }));
+  },
+
+  // ───── Messages ─────
+  sendMessage: async (projectId, sender, senderName, content) => {
+    const m = await api.post(`/decorators/projects/${projectId}/messages`, { sender, senderName, content });
+    set((s) => ({ messages: [...s.messages, m] }));
+    return m;
+  },
+
+  // ───── Decorator Invitations ─────
+  sendDecoratorInvitation: async (payload) => {
+    const inv = await api.post("/decorators/invite", payload);
+    set((s) => ({ decoratorInvitations: [...s.decoratorInvitations, inv] }));
+    return inv;
+  },
+
+  // ───── Permissions ─────
+  // setRolePermission / setRolePermissions：後端目前未實作（無 RolePermission 表）
+  // 保留 stub，UI 上的 toggle 不影響實際行為。MVP 後可加 RolePermission 表。
   setRolePermission: STUB("setRolePermission"),
   setRolePermissions: STUB("setRolePermissions"),
-  setMemberPermOverride: STUB("setMemberPermOverride"),
-  getEffectivePermission: () => true,  // 暫時都放行
+  setMemberPermOverride: async (userId, permKey, value) => {
+    // 把 permKey 拆成 resource/action（store 沿用 dot-separated key 格式）
+    const [resource, action] = permKey.includes(".") ? permKey.split(".") : [permKey, "view"];
+    const current = await api.get(`/users/${userId}/permissions`).catch(() => []);
+    let next;
+    if (value === undefined || value === null) {
+      next = current.filter((p) => !(p.resource === resource && p.action === action));
+    } else {
+      const exists = current.some((p) => p.resource === resource && p.action === action);
+      next = exists
+        ? current.map((p) => p.resource === resource && p.action === action ? { ...p, allow: !!value } : p)
+        : [...current, { resource, action, allow: !!value }];
+    }
+    const updated = await api.put(`/users/${userId}/permissions`, next);
+    set((s) => ({
+      memberPermOverrides: {
+        ...s.memberPermOverrides,
+        [userId]: Object.fromEntries(updated.map((p) => [`${p.resource}.${p.action}`, p.allow])),
+      },
+    }));
+  },
+  getEffectivePermission: () => true,  // 暫時都放行（後端未做 RolePermission 表）
 
   // ═════════════════════════════════════════════════════
   // Helpers / Selectors（read-only，從 state 算）
