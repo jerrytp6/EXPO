@@ -1,0 +1,644 @@
+// EX 參展廠商管理系統 — Prisma schema (Phase A2 完整版)
+//
+// 多租戶策略：row-level — 每張資源表都帶 tenantId，B2 middleware 強制過濾。
+// 跨租戶角色（portal-admin / super-admin）可顯式指定 ?tenantId= 切換視角。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 平台層
+// ═══════════════════════════════════════════════════════════════════════
+
+model Tenant {
+  id         String   @id @default(cuid())
+  name       String
+  taxId      String?
+  industry   String?
+  size       String?
+  address    String?
+  phone      String?
+  status     String   @default("active") // active / suspended
+  externalId String?  @unique @map("external_id") // PPT slide 4：Portal 自動映射
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users               User[]
+  subsystems          TenantSubsystem[]
+  events              Event[]
+  smtp                SmtpSetting?
+  emailTemplates      EmailTemplate[]
+  documentTemplates   DocumentTemplate[]
+  decorators          Decorator[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  passwordHash String  @map("password_hash")
+  name         String
+  role         String  // portal-admin | super-admin | company-admin | event-manager | member
+  title        String?
+  status       String  @default("active")
+
+  tenantId String? @map("tenant_id")
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  externalId String? @unique @map("external_id") // 預留 SSO
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  managedEvents Event[]              @relation("EventManager")
+  permissions   MemberPermOverride[]
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+model TenantSubsystem {
+  tenantId      String   @map("tenant_id")
+  subsystemKey  String   @map("subsystem_key") // ex / csm / punch / opportunity
+  externalId    String?  @map("external_id")   // Portal 端對應的子系統 user/account ID
+  activatedAt   DateTime @default(now()) @map("activated_at")
+  contractEnd   DateTime? @map("contract_end")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, subsystemKey])
+  @@map("tenant_subsystems")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 系統範本 / 設定（per tenant）
+// ═══════════════════════════════════════════════════════════════════════
+
+model DocumentTemplate {
+  id         String  @id @default(cuid())
+  tenantId   String  @map("tenant_id")
+  category   String  // 切結書 / 平面圖 / 須知 / ...
+  name       String
+  formats    String  @default(".pdf")
+  required   Boolean @default(true)
+  sortOrder  Int     @default(0) @map("sort_order")
+  fileName   String? @map("file_name")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uses   EventDocument[]
+
+  @@index([tenantId])
+  @@map("document_templates")
+}
+
+model EmailTemplate {
+  id         String  @id @default(cuid())
+  tenantId   String  @map("tenant_id")
+  scope      String  // tenant (預設) / event
+  eventId    String? @map("event_id")
+  trigger    String  // invitation / rsvp_confirmed / form_approved / ...
+  name       String
+  subject    String
+  body       String  @db.Text
+  isSystem   Boolean @default(false) @map("is_system")
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  event  Event? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("email_templates")
+}
+
+model SmtpSetting {
+  tenantId       String   @id @map("tenant_id")
+  host           String
+  port           Int      @default(587)
+  secure         Boolean  @default(false)
+  username       String
+  passwordMasked String   @map("password_masked")
+  fromEmail      String   @map("from_email")
+  fromName       String   @map("from_name")
+  replyTo        String?  @map("reply_to")
+  testStatus     String?  @map("test_status")
+  testError      String?  @map("test_error")
+  testedAt       DateTime? @map("tested_at")
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("smtp_settings")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 活動
+// ═══════════════════════════════════════════════════════════════════════
+
+model Event {
+  id                          String   @id @default(cuid())
+  tenantId                    String   @map("tenant_id")
+  name                        String
+  type                        String   // 國際展 / 商展 / 論壇 / ...
+  description                 String?  @db.Text
+  startDate                   DateTime @map("start_date")
+  endDate                     DateTime @map("end_date")
+  location                    String?
+  status                      String   @default("draft") // draft / active / closed
+  managerId                   String?  @map("manager_id")
+  capacity                    Int      @default(0)
+  boothSelfSelectionEnabled   Boolean  @default(false) @map("booth_self_selection_enabled")
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  manager           User?                @relation("EventManager", fields: [managerId], references: [id])
+  boothTypes        BoothType[]
+  vendors           Vendor[]
+  invitations       Invitation[]
+  rsvpResponses     RsvpResponse[]
+  notices           EventNotice[]
+  noticeAcks        NoticeAcknowledgment[]
+  forms             EventForm[]
+  formSubmissions   FormSubmission[]
+  documents         EventDocument[]
+  equipmentCatalog  EquipmentCatalogItem[]
+  equipmentRequests EquipmentRequest[]
+  preEventNotices   PreEventNotice[]
+  emailTemplates    EmailTemplate[]
+  decorationProjects DecorationProject[]
+  decoratorInvitations DecoratorInvitation[]
+  activities        Activity[]
+
+  @@index([tenantId])
+  @@index([managerId])
+  @@map("events")
+}
+
+model BoothType {
+  id          String  @id @default(cuid())
+  tenantId    String  @map("tenant_id")
+  eventId     String  @map("event_id")
+  name        String  // 標準型 / 標準A / 大型 / VIP / ...
+  size        String? // 9m² / 18m² / ...
+  price       Decimal @db.Decimal(12, 2)
+  capacity    Int     @default(0)
+  description String?
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  vendors Vendor[]
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("booth_types")
+}
+
+model EventDocument {
+  eventId    String   @map("event_id")
+  templateId String   @map("template_id")
+  tenantId   String   @map("tenant_id")
+  required   Boolean  @default(true)
+  deadline   DateTime?
+
+  event    Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  template DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, templateId])
+  @@index([tenantId])
+  @@map("event_documents")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 文件須知 / 表單 / 設備（活動子資源）
+// ═══════════════════════════════════════════════════════════════════════
+
+model EventNotice {
+  id                   String   @id @default(cuid())
+  tenantId             String   @map("tenant_id")
+  eventId              String   @map("event_id")
+  category             String
+  title                String
+  content              String   @db.LongText
+  attachmentName       String?  @map("attachment_name")
+  requiresAck          Boolean  @default(true) @map("requires_ack")
+  allowDecoratorView   Boolean  @default(false) @map("allow_decorator_view")
+  sortOrder            Int      @default(0) @map("sort_order")
+  publishedAt          DateTime? @map("published_at")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  event Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  acks  NoticeAcknowledgment[]
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("event_notices")
+}
+
+model NoticeAcknowledgment {
+  id              String   @id @default(cuid())
+  tenantId        String   @map("tenant_id")
+  eventId         String   @map("event_id")
+  vendorId        String   @map("vendor_id")
+  noticeId        String   @map("notice_id")
+  acknowledgedAt  DateTime @default(now()) @map("acknowledged_at")
+
+  event  Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  vendor Vendor      @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  notice EventNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, noticeId])
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("notice_acknowledgments")
+}
+
+model EventForm {
+  id                   String  @id @default(cuid())
+  tenantId             String  @map("tenant_id")
+  eventId              String  @map("event_id")
+  category             String
+  name                 String
+  templateFileName     String? @map("template_file_name")
+  formats              String  @default(".pdf")
+  isRequired           Boolean @default(true) @map("is_required")
+  hasFee               Boolean @default(false) @map("has_fee")
+  skipOption           Boolean @default(false) @map("skip_option")
+  showWhen             Json?   @map("show_when") // { field: "decorationMode", value: "self" }
+  deadline             DateTime?
+  sortOrder            Int     @default(0) @map("sort_order")
+  allowDecoratorUpload Boolean @default(false) @map("allow_decorator_upload")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  event       Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  submissions FormSubmission[]
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("event_forms")
+}
+
+model FormSubmission {
+  id                    String   @id @default(cuid())
+  tenantId              String   @map("tenant_id")
+  eventId               String   @map("event_id")
+  vendorId              String   @map("vendor_id")
+  formId                String   @map("form_id")
+  fileName              String   @map("file_name")
+  fileSize              String?  @map("file_size")
+  fee                   Decimal? @db.Decimal(12, 2)
+  paymentProofFileName  String?  @map("payment_proof_file_name")
+  status                String   // submitted | pending_fee_review | approved | rejected
+  reviewedBy            String?  @map("reviewed_by")
+  reviewedAt            DateTime? @map("reviewed_at")
+  feedback              String?  @db.Text
+  vendorConfirmed       Boolean  @default(false) @map("vendor_confirmed")
+  vendorConfirmedAt     DateTime? @map("vendor_confirmed_at")
+  needsReconfirm        Boolean  @default(false) @map("needs_reconfirm")
+  uploadedByRole        String   @default("vendor") @map("uploaded_by_role") // vendor | decorator
+  submittedAt           DateTime @default(now()) @map("submitted_at")
+
+  event  Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  vendor Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  form   EventForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  logs   SubmissionLog[]
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@index([vendorId])
+  @@index([formId])
+  @@map("form_submissions")
+}
+
+model EquipmentCatalogItem {
+  id        String  @id @default(cuid())
+  tenantId  String  @map("tenant_id")
+  eventId   String  @map("event_id")
+  category  String  // 電力 / 網路 / 展示 / 桌椅 / 燈光音響 / 其他
+  name      String
+  spec      String?
+  unit      String  @default("項")
+  unitPrice Decimal @db.Decimal(12, 2) @map("unit_price")
+  stock     Int?
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("equipment_catalog")
+}
+
+model EquipmentRequest {
+  id                   String   @id @default(cuid())
+  tenantId             String   @map("tenant_id")
+  eventId              String   @map("event_id")
+  vendorId             String   @map("vendor_id")
+  items                Json     // [{ catalogId, qty, spec }]
+  totalAmount          Decimal  @db.Decimal(12, 2) @map("total_amount")
+  status               String   // draft / pdf_generated / signed_uploaded / submitted / approved / rejected / paid
+  pdfGeneratedAt       DateTime? @map("pdf_generated_at")
+  signedFileName       String?  @map("signed_file_name")
+  paymentProofFileName String?  @map("payment_proof_file_name")
+  paidAt               DateTime? @map("paid_at")
+  reviewedBy           String?  @map("reviewed_by")
+  reviewedAt           DateTime? @map("reviewed_at")
+  feedback             String?  @db.Text
+  vendorConfirmed      Boolean  @default(false) @map("vendor_confirmed")
+  vendorConfirmedAt    DateTime? @map("vendor_confirmed_at")
+  needsReconfirm       Boolean  @default(false) @map("needs_reconfirm")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@index([vendorId])
+  @@map("equipment_requests")
+}
+
+model PreEventNotice {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  eventId       String   @map("event_id")
+  title         String
+  content       String   @db.Text
+  audience      String   // vendor / decorator / all
+  channels      Json     // ["email", "sms", "push"]
+  attachments   Json?    // [{ name, size }]
+  scheduledAt   DateTime? @map("scheduled_at")
+  sentAt        DateTime? @map("sent_at")
+  status        String   // scheduled / sent / draft
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("pre_event_notices")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 廠商
+// ═══════════════════════════════════════════════════════════════════════
+
+model Vendor {
+  id                       String   @id @default(cuid())
+  tenantId                 String   @map("tenant_id")
+  eventId                  String   @map("event_id")
+  company                  String
+  taxId                    String?  @map("tax_id")
+  contact                  String?
+  email                    String
+  phone                    String?
+  status                   String   @default("pending")
+  invitedAt                DateTime? @map("invited_at")
+  clickedAt                DateTime? @map("clicked_at")
+  registeredAt             DateTime? @map("registered_at")
+  rsvpStatus               String?  @map("rsvp_status") // accepted / declined
+  rsvpRespondedAt          DateTime? @map("rsvp_responded_at")
+  confirmStatus            String?  @map("confirm_status") // confirmed / null
+  confirmedAt              DateTime? @map("confirmed_at")
+  confirmedBy              String?  @map("confirmed_by")
+  confirmNote              String?  @map("confirm_note")
+  preferredBoothTypeId     String?  @map("preferred_booth_type_id")
+  boothTypeId              String?  @map("booth_type_id")
+  boothNumber              String?  @map("booth_number")
+  boothSelectionStatus     String?  @map("booth_selection_status") // pending / confirmed
+  boothSelectedBy          String?  @map("booth_selected_by")      // admin / vendor
+  boothSelectedAt          DateTime? @map("booth_selected_at")
+  depositStatus            String?  @map("deposit_status")  // paid / unpaid
+  balanceStatus            String?  @map("balance_status")  // paid / unpaid
+  decorationMode           String?  @map("decoration_mode") // self / booth-vendor
+  decoratorId              String?  @map("decorator_id")
+  profile                  Json?    // { ceoName, address, businessHours, ... }
+  products                 Json?    // [{ name, desc, ... }]
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  event           Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  boothType       BoothType?             @relation(fields: [boothTypeId], references: [id])
+  decorator       Decorator?             @relation(fields: [decoratorId], references: [id])
+  invitation      Invitation?
+  rsvps           RsvpResponse[]
+  noticeAcks      NoticeAcknowledgment[]
+  formSubmissions FormSubmission[]
+  equipmentReqs   EquipmentRequest[]
+  decorProjects   DecorationProject[]
+  activities      Activity[]
+
+  @@unique([eventId, email])
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("vendors")
+}
+
+model Invitation {
+  token     String   @id
+  tenantId  String   @map("tenant_id")
+  eventId   String   @map("event_id")
+  vendorId  String   @unique @map("vendor_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now())
+
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("invitations")
+}
+
+model RsvpResponse {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  eventId      String   @map("event_id")
+  vendorId     String   @map("vendor_id")
+  token        String
+  response     String   // accepted / declined
+  reason       String?
+  respondedAt  DateTime @default(now()) @map("responded_at")
+
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@index([vendorId])
+  @@map("rsvp_responses")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 裝潢廠商
+// ═══════════════════════════════════════════════════════════════════════
+
+model Decorator {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  taxId       String?  @map("tax_id")
+  email       String
+  phone       String?
+  address     String?
+  contact     String?
+  title       String?
+  specialties Json?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vendors  Vendor[]
+  projects DecorationProject[]
+
+  @@index([tenantId])
+  @@map("decorators")
+}
+
+model DecorationProject {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  eventId     String   @map("event_id")
+  vendorId    String   @map("vendor_id")
+  decoratorId String   @map("decorator_id")
+  title       String
+  status      String   // pending / in-progress / done
+  budget      Decimal? @db.Decimal(12, 2)
+  deadline    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  vendor    Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  decorator Decorator @relation(fields: [decoratorId], references: [id], onDelete: Cascade)
+  designs   Design[]
+  messages  Message[]
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@index([vendorId])
+  @@index([decoratorId])
+  @@map("decoration_projects")
+}
+
+model DecoratorInvitation {
+  token              String   @id
+  tenantId           String   @map("tenant_id")
+  eventId            String   @map("event_id")
+  fromVendorId       String   @map("from_vendor_id")
+  decoratorEmail     String   @map("decorator_email")
+  decoratorCompany   String?  @map("decorator_company")
+  message            String?
+  status             String   // sent / accepted / declined
+  expiresAt          DateTime @map("expires_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("decorator_invitations")
+}
+
+model Design {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  projectId    String   @map("project_id")
+  title        String
+  description  String?
+  version      Int      @default(1)
+  status       String   // pending / approved / rejected
+  feedback     String?
+  uploadedAt   DateTime @default(now()) @map("uploaded_at")
+
+  project DecorationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@map("designs")
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id")
+  projectId  String   @map("project_id")
+  sender     String   // vendor / decorator / admin
+  senderName String   @map("sender_name")
+  content    String   @db.Text
+  at         DateTime @default(now())
+
+  project DecorationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@map("messages")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 權限細粒度（會員例外）& Audit
+// ═══════════════════════════════════════════════════════════════════════
+
+model MemberPermOverride {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  resource  String   // events / vendors / forms / ...
+  action    String   // view / edit / delete / approve
+  allow     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resource, action])
+  @@index([tenantId])
+  @@map("member_perm_overrides")
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  eventId   String?  @map("event_id")
+  vendorId  String?  @map("vendor_id")
+  action    String   // clicked / registered / submitted / ...
+  detail    Json?
+  at        DateTime @default(now())
+
+  event  Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  vendor Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@index([vendorId])
+  @@index([at])
+  @@map("activities")
+}
+
+model SubmissionLog {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  submissionId String   @map("submission_id")
+  action       String   // submitted / reviewed / reconfirm_triggered / ...
+  by           String?
+  note         String?
+  at           DateTime @default(now())
+
+  submission FormSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([submissionId])
+  @@map("submission_logs")
+}
