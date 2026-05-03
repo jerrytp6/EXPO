@@ -63,12 +63,32 @@ async function request(method, path, { body, params, headers, signal } = {}) {
   return data;
 }
 
+// 檔案上傳：multipart/form-data
+// 回傳 { storedFileName, originalName, size, url }
+async function uploadFile(file, fieldName = "file") {
+  const fd = new FormData();
+  fd.append(fieldName, file);
+  const token = getToken();
+  const res = await fetch("/api/uploads", {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd,
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    if (res.status === 401) clearToken();
+    throw new ApiError(res.status, errBody);
+  }
+  return res.json();
+}
+
 export const api = {
   get: (path, opts) => request("GET", path, opts),
   post: (path, body, opts) => request("POST", path, { ...opts, body }),
   put: (path, body, opts) => request("PUT", path, { ...opts, body }),
   patch: (path, body, opts) => request("PATCH", path, { ...opts, body }),
   delete: (path, opts) => request("DELETE", path, opts),
+  upload: uploadFile,
 };
 
 export { ApiError };
