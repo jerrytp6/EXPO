@@ -6,6 +6,12 @@
 //   - 可透過 ?tenantId=xxx query 顯式指定切換到單一租戶視角
 //
 // 其他角色：強制使用 JWT 內的 tenantId，忽略任何 query override。
+//
+// B2：在 req.prisma 提供 multi-tenant scoped Prisma client，
+//     未來新 routes 應該優先使用 req.prisma 而不是 import 的 prisma，
+//     自動避免 tenant 漏洞。
+
+import { makeTenantClient } from "../lib/prisma-tenant.js";
 
 const CROSS_TENANT_ROLES = new Set(["portal-admin", "super-admin"]);
 
@@ -21,6 +27,8 @@ export function tenantContext(req, res, next) {
     req.tenantId = req.user.tenantId;
     req.isCrossTenant = false;
   }
+  // attach scoped Prisma client（read/create 自動 inject tenantId）
+  req.prisma = makeTenantClient(req.tenantId, req.isCrossTenant);
   next();
 }
 
