@@ -336,17 +336,63 @@ export const useData = create((set, get) => ({
   },
 
   // ═════════════════════════════════════════════════════
-  // A4.3/.4 stubs — 之後補
+  // A4.3：forms / equipment / notices
   // ═════════════════════════════════════════════════════
 
-  // forms（A4.3）
-  createForm: STUB("createForm"),
-  updateForm: STUB("updateForm"),
-  deleteForm: STUB("deleteForm"),
-  submitForm: STUB("submitForm"),
-  reviewFormSubmission: STUB("reviewFormSubmission"),
-  confirmFormSubmission: STUB("confirmFormSubmission"),
-  triggerReconfirm: STUB("triggerReconfirm"),
+  // ───── Notices ─────
+  createNotice: async (payload) => {
+    const n = await api.post("/notices", payload);
+    set((s) => ({ eventNotices: [...s.eventNotices, n] }));
+    return n;
+  },
+  updateNotice: async (id, patch) => {
+    const n = await api.patch(`/notices/${id}`, patch);
+    set((s) => ({ eventNotices: s.eventNotices.map((x) => x.id === id ? n : x) }));
+  },
+  deleteNotice: async (id) => {
+    await api.delete(`/notices/${id}`);
+    set((s) => ({ eventNotices: s.eventNotices.filter((x) => x.id !== id) }));
+  },
+  acknowledgeNotice: async (eventId, vendorId, noticeId) => {
+    const ack = await api.post(`/notices/${noticeId}/ack`, { vendorId });
+    set((s) => {
+      const exists = s.noticeAcknowledgments.some((a) => a.vendorId === vendorId && a.noticeId === noticeId);
+      return {
+        noticeAcknowledgments: exists
+          ? s.noticeAcknowledgments.map((a) => a.vendorId === vendorId && a.noticeId === noticeId ? ack : a)
+          : [...s.noticeAcknowledgments, ack],
+      };
+    });
+  },
+  getNoticesForVendor: (eventId) => {
+    return get().eventNotices
+      .filter((n) => n.eventId === eventId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  },
+  getNoticesForDecorator: (eventId) => {
+    // 裝潢廠商唯讀，PPT slide 11
+    return get().eventNotices
+      .filter((n) => n.eventId === eventId && n.allowDecoratorView)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  },
+
+  // ───── Forms ─────
+  createForm: async (payload) => {
+    const f = await api.post("/forms", payload);
+    set((s) => ({ eventForms: [...s.eventForms, f] }));
+    return f;
+  },
+  updateForm: async (id, patch) => {
+    const f = await api.patch(`/forms/${id}`, patch);
+    set((s) => ({ eventForms: s.eventForms.map((x) => x.id === id ? f : x) }));
+  },
+  deleteForm: async (id) => {
+    await api.delete(`/forms/${id}`);
+    set((s) => ({
+      eventForms: s.eventForms.filter((x) => x.id !== id),
+      formSubmissions: s.formSubmissions.filter((sub) => sub.formId !== id),
+    }));
+  },
   getFormsForVendor: (eventId, vendorId) => {
     const forms = get().eventForms.filter((f) => f.eventId === eventId);
     const vendor = get().vendors.find((v) => v.id === vendorId);
@@ -357,19 +403,69 @@ export const useData = create((set, get) => ({
     }).sort((a, b) => a.sortOrder - b.sortOrder);
   },
 
-  // notices（A4.3）
-  createNotice: STUB("createNotice"),
-  updateNotice: STUB("updateNotice"),
-  deleteNotice: STUB("deleteNotice"),
-  acknowledgeNotice: STUB("acknowledgeNotice"),
+  // ───── Form Submissions（含三態確認 + reconfirm）─────
+  submitForm: async (eventId, vendorId, formId, payload) => {
+    const sub = await api.post("/forms/submissions", {
+      vendorId, formId,
+      fileName: payload.fileName,
+      fileSize: payload.fileSize,
+      fee: payload.fee,
+      paymentProofFileName: payload.paymentProofFileName,
+      uploadedByRole: payload.uploadedByRole || "vendor",
+    });
+    set((s) => ({ formSubmissions: [...s.formSubmissions, sub] }));
+    return sub;
+  },
+  reviewFormSubmission: async (id, status, feedback, _reviewerName) => {
+    const sub = await api.post(`/forms/submissions/${id}/review`, { status, feedback });
+    set((s) => ({ formSubmissions: s.formSubmissions.map((x) => x.id === id ? sub : x) }));
+  },
+  confirmFormSubmission: async (id) => {
+    const sub = await api.post(`/forms/submissions/${id}/confirm`);
+    set((s) => ({ formSubmissions: s.formSubmissions.map((x) => x.id === id ? sub : x) }));
+  },
+  triggerReconfirm: async (id) => {
+    const sub = await api.post(`/forms/submissions/${id}/reconfirm`);
+    set((s) => ({ formSubmissions: s.formSubmissions.map((x) => x.id === id ? sub : x) }));
+  },
 
-  // equipment（A4.3）
-  createEquipmentItem: STUB("createEquipmentItem"),
-  updateEquipmentItem: STUB("updateEquipmentItem"),
-  deleteEquipmentItem: STUB("deleteEquipmentItem"),
-  createEquipmentRequest: STUB("createEquipmentRequest"),
-  updateEquipmentRequest: STUB("updateEquipmentRequest"),
-  reviewEquipmentRequest: STUB("reviewEquipmentRequest"),
+  // ───── Equipment Catalog ─────
+  createEquipmentItem: async (payload) => {
+    const item = await api.post("/equipment/catalog", payload);
+    set((s) => ({ eventEquipmentCatalog: [...s.eventEquipmentCatalog, item] }));
+    return item;
+  },
+  updateEquipmentItem: async (id, patch) => {
+    const item = await api.patch(`/equipment/catalog/${id}`, patch);
+    set((s) => ({ eventEquipmentCatalog: s.eventEquipmentCatalog.map((x) => x.id === id ? item : x) }));
+  },
+  deleteEquipmentItem: async (id) => {
+    await api.delete(`/equipment/catalog/${id}`);
+    set((s) => ({ eventEquipmentCatalog: s.eventEquipmentCatalog.filter((x) => x.id !== id) }));
+  },
+
+  // ───── Equipment Requests（PPT slide 13 完整鏈路）─────
+  createEquipmentRequest: async (eventId, vendorId, items) => {
+    const req = await api.post("/equipment/requests", { eventId, vendorId, items });
+    set((s) => ({ equipmentRequests: [...s.equipmentRequests, req] }));
+    return req;
+  },
+  updateEquipmentRequest: async (id, patch) => {
+    const req = await api.patch(`/equipment/requests/${id}`, patch);
+    set((s) => ({ equipmentRequests: s.equipmentRequests.map((x) => x.id === id ? req : x) }));
+  },
+  reviewEquipmentRequest: async (id, status, feedback, _reviewerName) => {
+    const req = await api.post(`/equipment/requests/${id}/review`, { status, feedback });
+    set((s) => ({ equipmentRequests: s.equipmentRequests.map((x) => x.id === id ? req : x) }));
+  },
+  confirmEquipmentRequest: async (id) => {
+    const req = await api.post(`/equipment/requests/${id}/confirm`);
+    set((s) => ({ equipmentRequests: s.equipmentRequests.map((x) => x.id === id ? req : x) }));
+  },
+  triggerEquipmentReconfirm: async (id) => {
+    const req = await api.post(`/equipment/requests/${id}/reconfirm`);
+    set((s) => ({ equipmentRequests: s.equipmentRequests.map((x) => x.id === id ? req : x) }));
+  },
 
   // document templates（A4.4）
   createDocTemplate: STUB("createDocTemplate"),
