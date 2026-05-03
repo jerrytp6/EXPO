@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { sendByTrigger, appUrl } from "../lib/mailer.js";
 
 export const equipmentRouter = Router();
 
@@ -161,7 +162,13 @@ equipmentRouter.patch("/requests/:id", async (req, res, next) => {
 // 管理員審核
 equipmentRouter.post("/requests/:id/review", requireRole("company-admin", "event-manager"), async (req, res, next) => {
   try {
-    const target = await prisma.equipmentRequest.findFirst({ where: { id: req.params.id, ...scopeWhere(req) } });
+    const target = await prisma.equipmentRequest.findFirst({
+      where: { id: req.params.id, ...scopeWhere(req) },
+      include: {
+        vendor: true,
+        event: { select: { name: true } },
+      },
+    });
     if (!target) return res.status(404).json({ error: "not_found" });
     const { status, feedback } = z.object({
       status: z.enum(["approved", "rejected"]),
@@ -177,6 +184,22 @@ equipmentRouter.post("/requests/:id/review", requireRole("company-admin", "event
         reviewedAt: new Date(),
       },
     });
+
+    // 寄審核結果通知
+    sendByTrigger({
+      tenantId: target.tenantId,
+      eventId: target.eventId,
+      trigger: status === "approved" ? "equipment_approved" : "equipment_rejected",
+      to: target.vendor.email,
+      vars: {
+        vendor: { company: target.vendor.company, contact: target.vendor.contact },
+        event: { name: target.event.name },
+        amount: Number(target.totalAmount).toLocaleString(),
+        feedback: feedback || "",
+        portal_url: appUrl(`/portal/vendor/${target.vendor.id}/equipment`),
+      },
+    }).catch(() => {});
+
     res.json(updated);
   } catch (err) { next(err); }
 });

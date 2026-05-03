@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { sendByTrigger, appUrl } from "../lib/mailer.js";
 
 export const vendorsRouter = Router();
 export const publicVendorsRouter = Router(); // 不掛 auth — 公開 token 流程
@@ -96,7 +97,10 @@ vendorsRouter.delete("/:id", requireRole("company-admin", "event-manager"), asyn
 
 vendorsRouter.post("/:id/invite", requireRole("company-admin", "event-manager"), async (req, res, next) => {
   try {
-    const vendor = await prisma.vendor.findFirst({ where: { id: req.params.id, ...scopeWhere(req) } });
+    const vendor = await prisma.vendor.findFirst({
+      where: { id: req.params.id, ...scopeWhere(req) },
+      include: { event: true },
+    });
     if (!vendor) return res.status(404).json({ error: "not_found" });
     const token = crypto.randomBytes(16).toString("hex");
     await prisma.$transaction([
@@ -119,14 +123,31 @@ vendorsRouter.post("/:id/invite", requireRole("company-admin", "event-manager"),
         data: { tenantId: vendor.tenantId, eventId: vendor.eventId, vendorId: vendor.id, action: "invited" },
       }),
     ]);
-    res.json({ ok: true, token });
+
+    // 寄邀約信（不阻塞回應）
+    const mailRes = await sendByTrigger({
+      tenantId: vendor.tenantId,
+      eventId: vendor.eventId,
+      trigger: "invitation",
+      to: vendor.email,
+      vars: {
+        vendor: { company: vendor.company, contact: vendor.contact, email: vendor.email },
+        event: { name: vendor.event.name, location: vendor.event.location, startDate: vendor.event.startDate?.toISOString().slice(0, 10), endDate: vendor.event.endDate?.toISOString().slice(0, 10) },
+        invite_url: appUrl(`/invite/${token}`),
+      },
+    });
+
+    res.json({ ok: true, token, mail: mailRes });
   } catch (err) { next(err); }
 });
 
 // 確認參展（管理員把 RSVP=accepted 的廠商加入正式名單）— PPT slide 8
 vendorsRouter.post("/:id/confirm", requireRole("company-admin", "event-manager"), async (req, res, next) => {
   try {
-    const vendor = await prisma.vendor.findFirst({ where: { id: req.params.id, ...scopeWhere(req) } });
+    const vendor = await prisma.vendor.findFirst({
+      where: { id: req.params.id, ...scopeWhere(req) },
+      include: { event: true },
+    });
     if (!vendor) return res.status(404).json({ error: "not_found" });
     const { confirmStatus = "confirmed", confirmNote = "" } = req.body || {};
     const updated = await prisma.vendor.update({
@@ -138,6 +159,22 @@ vendorsRouter.post("/:id/confirm", requireRole("company-admin", "event-manager")
         confirmNote,
       },
     });
+
+    // 寄通知：確認加入名單
+    if (confirmStatus === "confirmed") {
+      sendByTrigger({
+        tenantId: vendor.tenantId,
+        eventId: vendor.eventId,
+        trigger: "vendor_confirmed",
+        to: vendor.email,
+        vars: {
+          vendor: { company: vendor.company, contact: vendor.contact },
+          event: { name: vendor.event.name, location: vendor.event.location },
+          portal_url: appUrl(`/portal/vendor/${vendor.id}`),
+        },
+      }).catch(() => {});
+    }
+
     res.json(updated);
   } catch (err) { next(err); }
 });

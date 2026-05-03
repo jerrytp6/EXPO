@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { verifySmtp, sendMail } from "../lib/mailer.js";
 
 export const settingsRouter = Router();
 
@@ -46,12 +47,16 @@ settingsRouter.put("/smtp", requireRole("company-admin"), async (req, res, next)
 settingsRouter.post("/smtp/test", requireRole("company-admin"), async (req, res, next) => {
   try {
     const tenantId = requireWriteTenant(req);
-    // 真實 SMTP 測試需 nodemailer，這裡先模擬
+    const result = await verifySmtp(tenantId);
     const smtp = await prisma.smtpSetting.update({
       where: { tenantId },
-      data: { testStatus: "success", testedAt: new Date(), testError: null },
+      data: {
+        testStatus: result.ok ? "success" : "failed",
+        testError: result.ok ? null : result.error,
+        testedAt: new Date(),
+      },
     });
-    res.json({ ok: true, smtp });
+    res.json({ ok: result.ok, smtp, error: result.error });
   } catch (err) { next(err); }
 });
 
@@ -248,13 +253,41 @@ settingsRouter.patch("/pre-event/:id", requireRole("company-admin", "event-manag
 
 settingsRouter.post("/pre-event/:id/send", requireRole("company-admin", "event-manager"), async (req, res, next) => {
   try {
-    const target = await prisma.preEventNotice.findFirst({ where: { id: req.params.id, ...scopeWhere(req) } });
+    const target = await prisma.preEventNotice.findFirst({
+      where: { id: req.params.id, ...scopeWhere(req) },
+      include: { event: { select: { name: true } } },
+    });
     if (!target) return res.status(404).json({ error: "not_found" });
+
+    // 撈收件人：依 audience 取出 vendors
+    const vendors = await prisma.vendor.findMany({
+      where: {
+        eventId: target.eventId,
+        ...(target.audience === "vendor" || target.audience === "all"
+          ? { confirmStatus: "confirmed" }
+          : {}),
+      },
+      select: { email: true, company: true, contact: true },
+    });
+
+    // 群發（並行，但不阻塞回應）
+    const results = await Promise.all(
+      vendors.map((v) =>
+        sendMail({
+          tenantId: target.tenantId,
+          to: v.email,
+          subject: `【${target.event.name}】${target.title}`,
+          html: `<p>${v.company} ${v.contact || ""} 您好：</p>${target.content}`,
+        }).catch((err) => ({ sent: false, reason: err.message }))
+      )
+    );
+    const sentCount = results.filter((r) => r?.sent).length;
+
     const item = await prisma.preEventNotice.update({
       where: { id: req.params.id },
       data: { status: "sent", sentAt: new Date() },
     });
-    res.json(item);
+    res.json({ ...item, sentCount, totalRecipients: vendors.length });
   } catch (err) { next(err); }
 });
 

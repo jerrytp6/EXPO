@@ -31,5 +31,15 @@ services:
       mysql:
         condition: service_healthy
 
+  # dev 階段測試 SMTP — UI 在 :8025 看寄出的信、:1025 是 SMTP listener
+  # 生產環境用業主提供的 SMTP，這個 service 不啟用即可
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ex-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+
 volumes:
   ex-mysql-data:

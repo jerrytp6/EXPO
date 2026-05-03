@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { sendByTrigger, appUrl } from "../lib/mailer.js";
 
 export const formsRouter = Router();
 
@@ -151,7 +152,14 @@ formsRouter.post("/submissions", async (req, res, next) => {
 // 管理員審核
 formsRouter.post("/submissions/:id/review", requireRole("company-admin", "event-manager"), async (req, res, next) => {
   try {
-    const target = await prisma.formSubmission.findFirst({ where: { id: req.params.id, ...scopeWhere(req) } });
+    const target = await prisma.formSubmission.findFirst({
+      where: { id: req.params.id, ...scopeWhere(req) },
+      include: {
+        vendor: true,
+        form: { select: { name: true } },
+        event: { select: { name: true } },
+      },
+    });
     if (!target) return res.status(404).json({ error: "not_found" });
     const { status, feedback } = z.object({
       status: z.enum(["approved", "rejected"]),
@@ -169,6 +177,22 @@ formsRouter.post("/submissions/:id/review", requireRole("company-admin", "event-
     await prisma.submissionLog.create({
       data: { tenantId: sub.tenantId, submissionId: sub.id, action: "reviewed", by: req.user.name, note: status },
     });
+
+    // 寄審核結果通知
+    sendByTrigger({
+      tenantId: target.tenantId,
+      eventId: target.eventId,
+      trigger: status === "approved" ? "form_approved" : "form_rejected",
+      to: target.vendor.email,
+      vars: {
+        vendor: { company: target.vendor.company, contact: target.vendor.contact },
+        event: { name: target.event.name },
+        form: { name: target.form.name },
+        feedback: feedback || "",
+        portal_url: appUrl(`/portal/vendor/${target.vendor.id}/forms`),
+      },
+    }).catch(() => {});
+
     res.json(sub);
   } catch (err) { next(err); }
 });
