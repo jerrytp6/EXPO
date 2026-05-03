@@ -97,14 +97,20 @@ export function AppLayout({ children }) {
     return () => document.documentElement.removeAttribute("data-role");
   }, [cfg]);
 
+  // 登入後一次拉所有資料（A4 起改用 API）
+  const bootstrap = useData((s) => s.bootstrap);
+  useEffect(() => {
+    if (user && events.length === 0) {
+      bootstrap(user);
+    }
+  }, [user]);
+
   if (!user) {
     return <Navigate to="/portal-login" replace state={{ from: location.pathname }} />;
   }
 
   const handleLogout = () => {
     logout();
-    // 同步清除 Portal SSO 認證狀態 → 回 Portal 登入頁
-    localStorage.removeItem("portal-mock-user");
     toast.info("已登出");
     navigate("/portal-login", { replace: true });
   };

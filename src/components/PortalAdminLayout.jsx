@@ -1,13 +1,20 @@
+import { useEffect } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../store/auth";
 import { useData } from "../store/data";
 import { Icon } from "../components/Icon";
 
 // Portal 管理後台共用版型（與 EX AppLayout 分開，視覺區隔）
 export function PortalAdminLayout({ children }) {
   const navigate = useNavigate();
-  const { users } = useData();
-  const currentUserId = localStorage.getItem("portal-mock-user");
-  const currentUser = users.find((u) => u.id === currentUserId);
+  const { user: currentUser, logout: doLogout } = useAuth();
+
+  // 登入後拉資料（companies / users 等）
+  const bootstrap = useData((s) => s.bootstrap);
+  const companies = useData((s) => s.companies);
+  useEffect(() => {
+    if (currentUser && companies.length === 0) bootstrap(currentUser);
+  }, [currentUser]);
 
   const menu = [
     { to: "/portal/admin",             label: "儀表板",       icon: "activity", end: true },
@@ -17,7 +24,7 @@ export function PortalAdminLayout({ children }) {
   ];
 
   const logout = () => {
-    localStorage.removeItem("portal-mock-user");
+    doLogout();
     navigate("/portal-login", { replace: true });
   };
 

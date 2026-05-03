@@ -1,6 +1,5 @@
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth, ROLE_HOME } from "./store/auth";
-import { useData } from "./store/data";
 import { AppLayout } from "./components/AppLayout";
 import { ToastContainer } from "./components/Toast";
 
@@ -67,11 +66,9 @@ function Protected({ children, role }) {
   return <AppLayout>{children}</AppLayout>;
 }
 
-// Portal 管理後台守門：只有 Portal 認證為 portal-admin 可進入
+// Portal 管理後台守門：只有 portal-admin 可進入
 function PortalAdminGuard({ children }) {
-  const currentUserId = typeof window !== "undefined" ? localStorage.getItem("portal-mock-user") : null;
-  const users = useData.getState().users;
-  const user = users.find((u) => u.id === currentUserId);
+  const user = useAuth((s) => s.user);
   if (!user) return <Navigate to="/portal-login" replace />;
   if (user.role !== "portal-admin") return <Navigate to="/portal" replace />;
   return <PortalAdminLayout>{children}</PortalAdminLayout>;

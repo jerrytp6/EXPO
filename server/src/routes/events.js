@@ -29,7 +29,8 @@ eventsRouter.get("/", async (req, res, next) => {
       orderBy: { startDate: "desc" },
       include: {
         manager: { select: { id: true, name: true } },
-        _count: { select: { vendors: true, boothTypes: true } },
+        boothTypes: { orderBy: { sortOrder: "asc" } },
+        _count: { select: { vendors: true } },
       },
     });
     res.json(events);
