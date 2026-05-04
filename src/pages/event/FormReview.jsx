@@ -9,7 +9,11 @@ import { toast } from "../../store/toast";
 // 廠商繳交 → 管理員審核 → 通過 → 廠商確認 → 管理員可觸發重新確認
 export default function FormReview() {
   const { eventId } = useParams();
-  const { eventForms, formSubmissions, vendors, events, reviewFormSubmission, triggerReconfirm } = useData();
+  const {
+    eventForms, formSubmissions, vendors, events,
+    reviewFormSubmission, triggerReconfirm,
+    submissionLogs, fetchSubmissionLogs,
+  } = useData();
   const event = events.find((e) => e.id === eventId);
 
   const forms = (eventForms || []).filter((f) => f.eventId === eventId);
@@ -20,6 +24,24 @@ export default function FormReview() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [target, setTarget] = useState(null);
   const [decision, setDecision] = useState({ status: "approved", feedback: "" });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState(null);
+
+  const openHistory = async (s) => {
+    setHistoryTarget(s);
+    setHistoryOpen(true);
+    await fetchSubmissionLogs(s.id);
+  };
+  const targetLogs = historyTarget
+    ? submissionLogs.filter((l) => l.submissionId === historyTarget.id).sort((a, b) => new Date(a.at) - new Date(b.at))
+    : [];
+
+  const ACTION_LABEL = {
+    submitted: { label: "廠商提交", cls: "chip-blue" },
+    reviewed: { label: "管理員審核", cls: "chip-green" },
+    vendor_confirmed: { label: "廠商確認", cls: "chip-green" },
+    reconfirm_triggered: { label: "↺ 觸發重新確認", cls: "chip-orange" },
+  };
 
   const filtered = filter === "all" ? subs : subs.filter((s) => s.status === filter);
 
@@ -156,6 +178,7 @@ export default function FormReview() {
                 {
                   content: (
                     <div className="flex gap-1 flex-wrap">
+                      <button className="btn btn-sm btn-ghost" onClick={() => openHistory(s)} title="歷史紀錄">📜</button>
                       {(s.status === "submitted" || s.status === "pending_fee_review") && (
                         <button className="btn btn-sm btn-primary" onClick={() => openReview(s)}>審核</button>
                       )}
@@ -244,6 +267,46 @@ export default function FormReview() {
               <button className="btn btn-primary" onClick={confirmReview}>
                 確認{decision.status === "approved" ? "核可" : "退回"}
               </button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {/* 歷史紀錄 Modal — E3 audit log */}
+      <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title="繳交歷史紀錄" width="600px">
+        {historyTarget && (
+          <>
+            <div className="mb-4 text-[13px]" style={{ color: "var(--text-secondary)" }}>
+              {eventVendors.find((v) => v.id === historyTarget.vendorId)?.company} —
+              {forms.find((f) => f.id === historyTarget.formId)?.name}
+            </div>
+            {targetLogs.length === 0 ? (
+              <div className="py-8 text-center text-[13px]" style={{ color: "var(--text-tertiary)" }}>
+                尚無歷史紀錄
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {targetLogs.map((l) => {
+                  const lab = ACTION_LABEL[l.action] || { label: l.action, cls: "" };
+                  return (
+                    <div key={l.id} className="flex gap-3 items-start">
+                      <div className="w-2 h-2 rounded-full mt-2" style={{ background: "var(--role-color)" }} />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`chip ${lab.cls}`}>{lab.label}</span>
+                          {l.note && <span className="text-[12px]" style={{ color: "var(--text-tertiary)" }}>{l.note}</span>}
+                        </div>
+                        <div className="text-[11px] mt-1 font-display" style={{ color: "var(--text-tertiary)" }}>
+                          {l.by ? `${l.by} · ` : ""}{new Date(l.at).toLocaleString("zh-TW")}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex justify-end mt-6">
+              <button className="btn" onClick={() => setHistoryOpen(false)}>關閉</button>
             </div>
           </>
         )}

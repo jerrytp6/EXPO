@@ -16,6 +16,7 @@ import { equipmentRouter } from "./routes/equipment.js";
 import { decoratorsRouter, publicDecoratorsRouter } from "./routes/decorators.js";
 import { settingsRouter } from "./routes/settings.js";
 import { uploadsRouter, filesRouter } from "./routes/uploads.js";
+import { auditRouter } from "./routes/audit.js";
 import { errorHandler } from "./middleware/error.js";
 
 const app = express();
@@ -46,6 +47,7 @@ app.use("/decorators", decoratorsRouter);
 app.use("/settings", settingsRouter);
 app.use("/uploads", uploadsRouter);
 app.use("/files", filesRouter);
+app.use("/audit", auditRouter);
 
 // 未匹配
 app.use((req, res) => res.status(404).json({ error: "not_found", path: req.path }));

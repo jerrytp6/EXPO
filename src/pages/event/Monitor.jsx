@@ -5,7 +5,8 @@ import { SceneHead, Panel, StatGrid } from "../../components/Scene";
 import { Icon } from "../../components/Icon";
 
 function timeAgo(ts) {
-  const sec = Math.floor((Date.now() - ts) / 1000);
+  const t = typeof ts === "number" ? ts : new Date(ts).getTime();
+  const sec = Math.floor((Date.now() - t) / 1000);
   if (sec < 60) return `${sec} 秒前`;
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min} 分鐘前`;
@@ -15,21 +16,28 @@ function timeAgo(ts) {
 }
 
 const ACTION = {
-  clicked: { label: "點擊邀請連結", cls: "badge-blue", icon: "link" },
-  registered: { label: "完成報名", cls: "badge-green", icon: "check" },
+  invited:    { label: "已寄出邀約", cls: "badge-blue",   icon: "send" },
+  clicked:    { label: "點擊邀請連結", cls: "badge-blue", icon: "link" },
+  registered: { label: "完成註冊", cls: "badge-green",   icon: "check" },
+  rsvp_accepted: { label: "RSVP 接受", cls: "badge-green", icon: "check" },
+  rsvp_declined: { label: "RSVP 拒絕", cls: "badge-red",   icon: "x" },
 };
 
 export default function Monitor() {
   const { eventId } = useParams();
-  const { events, vendors, activities } = useData();
+  const { events, vendors, activities, fetchActivities } = useData();
   const event = events.find((e) => e.id === eventId);
   const [tick, setTick] = useState(0);
 
-  // 每 5 秒刷新時間顯示
+  // 每 5 秒輪詢 activities + 刷新時間顯示
   useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), 5000);
+    fetchActivities({ eventId, limit: 50 });
+    const t = setInterval(() => {
+      setTick((n) => n + 1);
+      fetchActivities({ eventId, limit: 50 });
+    }, 5000);
     return () => clearInterval(t);
-  }, []);
+  }, [eventId]);
 
   if (!event) return <Navigate to="/event" replace />;
 
@@ -75,9 +83,9 @@ export default function Monitor() {
           </div>
         ) : (
           recent.map((a) => {
-            const vendor = vendors.find((v) => v.id === a.vendorId);
+            const vendor = a.vendor || vendors.find((v) => v.id === a.vendorId);
             if (!vendor) return null;
-            const act = ACTION[a.action] || ACTION.clicked;
+            const act = ACTION[a.action] || { label: a.action, cls: "badge-gray", icon: "activity" };
             return (
               <div key={a.id} className="flex items-center gap-3 py-3"
                 style={{ borderBottom: "1px solid var(--separator)" }}>

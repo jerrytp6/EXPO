@@ -157,6 +157,26 @@ export const useData = create((set, get) => ({
     set({ events: events.map(stamp), vendors });
   },
 
+  // ───── E3 Audit log 讀取 ─────
+  fetchActivities: async (filters = {}) => {
+    const params = new URLSearchParams(filters).toString();
+    const items = await api.get(`/audit/activities${params ? "?" + params : ""}`).catch(() => []);
+    set({ activities: items });
+    return items;
+  },
+  fetchSubmissionLogs: async (submissionId) => {
+    if (!submissionId) return [];
+    const logs = await api.get(`/audit/submission-logs/${submissionId}`).catch(() => []);
+    // 合併到 state（同一 submission 的 logs 替換）
+    set((s) => ({
+      submissionLogs: [
+        ...s.submissionLogs.filter((l) => l.submissionId !== submissionId),
+        ...logs,
+      ],
+    }));
+    return logs;
+  },
+
   resetAll: () => set(initialState),
 
   // ═════════════════════════════════════════════════════
