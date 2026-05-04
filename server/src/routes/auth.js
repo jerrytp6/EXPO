@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import { requireAuth } from "../middleware/auth.js";
+import { getEffectivePermissionsWithTenant } from "../lib/permissions.js";
 
 export const authRouter = Router();
 
@@ -49,6 +50,16 @@ authRouter.post("/login", async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// Effective permissions（role default + user overrides）
+authRouter.get("/me/permissions", requireAuth, async (req, res, next) => {
+  try {
+    const perms = await getEffectivePermissionsWithTenant(
+      req.user.userId, req.user.role, req.user.tenantId
+    );
+    res.json({ role: req.user.role, perms });
+  } catch (err) { next(err); }
 });
 
 authRouter.get("/me", requireAuth, async (req, res, next) => {

@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
+import { permit } from "../middleware/permit.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
 
@@ -47,7 +48,7 @@ vendorsRouter.get("/:id", async (req, res, next) => {
 });
 
 // 匯入廠商（單筆或批次）— PPT slide 8 廠商匯入
-vendorsRouter.post("/", requireRole("company-admin", "event-manager"), async (req, res, next) => {
+vendorsRouter.post("/", permit("vendors", "import"), async (req, res, next) => {
   try {
     const tenantId = requireWriteTenant(req);
     const eventId = req.body.eventId || req.query.eventId;
@@ -95,7 +96,7 @@ vendorsRouter.delete("/:id", requireRole("company-admin", "event-manager"), asyn
 
 // ───── 邀約 ─────
 
-vendorsRouter.post("/:id/invite", requireRole("company-admin", "event-manager"), async (req, res, next) => {
+vendorsRouter.post("/:id/invite", permit("vendors", "invite"), async (req, res, next) => {
   try {
     const vendor = await prisma.vendor.findFirst({
       where: { id: req.params.id, ...scopeWhere(req) },

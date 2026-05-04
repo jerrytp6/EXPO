@@ -116,6 +116,9 @@ export const useData = create((set, get) => ({
         api.get("/settings/event-documents").catch(() => []),
       ]);
 
+      // 拉自己的 effective permissions（不阻塞）
+      api.get("/auth/me/permissions").then((p) => set({ myPermissions: p })).catch(() => {});
+
       set({
         users,
         companies,
@@ -692,10 +695,31 @@ export const useData = create((set, get) => ({
   },
 
   // ───── Permissions ─────
-  // setRolePermission / setRolePermissions：後端目前未實作（無 RolePermission 表）
-  // 保留 stub，UI 上的 toggle 不影響實際行為。MVP 後可加 RolePermission 表。
-  setRolePermission: STUB("setRolePermission"),
-  setRolePermissions: STUB("setRolePermissions"),
+  // 前端慣性：permKey 用 "resource.action" 格式（如 "events.create"）
+  setRolePermission: async (_companyId, role, permKey, allow) => {
+    const [resource, action] = permKey.split(".");
+    if (!resource || !action) {
+      console.warn("[store] setRolePermission: bad permKey", permKey);
+      return;
+    }
+    if (allow == null || allow === undefined) {
+      // null = 移除 override，回到 DEFAULT_ROLE_PERMS
+      await api.delete(`/users/role-permissions/${role}/${resource}/${action}`);
+    } else {
+      await api.patch(`/users/role-permissions/${role}/${resource}/${action}`, { allow: !!allow });
+    }
+    // 重拉自己的 effective permissions（萬一 toggle 自己 role）
+    api.get("/auth/me/permissions").then((p) => set({ myPermissions: p })).catch(() => {});
+  },
+  setRolePermissions: async (_companyId, role, perms) => {
+    // perms 是 { "events.create": true, ... } 形式，轉成 array
+    const arr = Object.entries(perms).map(([k, v]) => {
+      const [resource, action] = k.split(".");
+      return { resource, action, allow: !!v };
+    });
+    await api.put(`/users/role-permissions/${role}`, arr);
+    api.get("/auth/me/permissions").then((p) => set({ myPermissions: p })).catch(() => {});
+  },
   setMemberPermOverride: async (userId, permKey, value) => {
     // 把 permKey 拆成 resource/action（store 沿用 dot-separated key 格式）
     const [resource, action] = permKey.includes(".") ? permKey.split(".") : [permKey, "view"];
@@ -717,7 +741,23 @@ export const useData = create((set, get) => ({
       },
     }));
   },
-  getEffectivePermission: () => true,  // 暫時都放行（後端未做 RolePermission 表）
+
+  // 從後端拉自己的 effective permissions（在 bootstrap 後填）— 同步讀
+  myPermissions: { perms: {}, role: null },
+  fetchMyPermissions: async () => {
+    try {
+      const r = await api.get("/auth/me/permissions");
+      set({ myPermissions: r });
+      return r;
+    } catch { return null; }
+  },
+  // 給 component 用：讀取目前 user 是否有權限
+  getEffectivePermission: (_companyId, _userId, _role, permKey) => {
+    const my = get().myPermissions;
+    if (my.perms?.["*"]) return true;
+    if (my.perms && my.perms[permKey] != null) return !!my.perms[permKey];
+    return false;
+  },
 
   // ═════════════════════════════════════════════════════
   // Helpers / Selectors（read-only，從 state 算）

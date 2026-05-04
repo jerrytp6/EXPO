@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
+import { permit } from "../middleware/permit.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
 
 export const eventsRouter = Router();
@@ -51,7 +52,7 @@ eventsRouter.get("/:id", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-eventsRouter.post("/", requireRole("company-admin", "event-manager", "super-admin", "portal-admin"), async (req, res, next) => {
+eventsRouter.post("/", permit("events", "create"), async (req, res, next) => {
   try {
     const tenantId = requireWriteTenant(req);
     const body = eventSchema.parse(req.body);
@@ -80,7 +81,7 @@ eventsRouter.patch("/:id", requireRole("company-admin", "event-manager", "super-
   } catch (err) { next(err); }
 });
 
-eventsRouter.delete("/:id", requireRole("company-admin", "super-admin", "portal-admin"), async (req, res, next) => {
+eventsRouter.delete("/:id", permit("events", "delete"), async (req, res, next) => {
   try {
     const target = await prisma.event.findFirst({ where: { id: req.params.id, ...scopeWhere(req) } });
     if (!target) return res.status(404).json({ error: "not_found" });

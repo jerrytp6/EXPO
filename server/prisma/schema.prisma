@@ -614,6 +614,22 @@ model MemberPermOverride {
   @@map("member_perm_overrides")
 }
 
+// E2：tenant 級 role 權限客製化（蓋過 DEFAULT_ROLE_PERMS，但被 user override 蓋過）
+model RolePermission {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  role      String   // company-admin / event-manager / member
+  resource  String
+  action    String
+  allow     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, role, resource, action])
+  @@index([tenantId, role])
+  @@map("role_permissions")
+}
+
 model Activity {
   id        String   @id @default(cuid())
   tenantId  String   @map("tenant_id")

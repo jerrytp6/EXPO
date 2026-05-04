@@ -118,6 +118,67 @@ usersRouter.get("/:id/permissions", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ───── Role-level permissions（tenant 客製化）─────
+
+usersRouter.get("/role-permissions/:role", async (req, res, next) => {
+  try {
+    const tenantId = requireWriteTenant(req);
+    const perms = await prisma.rolePermission.findMany({
+      where: { tenantId, role: req.params.role },
+    });
+    res.json(perms);
+  } catch (err) { next(err); }
+});
+
+// 整批替換指定 role 的權限
+usersRouter.put("/role-permissions/:role", requireRole("portal-admin", "super-admin", "company-admin"), async (req, res, next) => {
+  try {
+    const tenantId = requireWriteTenant(req);
+    const role = req.params.role;
+    const body = z.array(z.object({
+      resource: z.string(),
+      action: z.string(),
+      allow: z.boolean().default(true),
+    })).parse(req.body);
+    await prisma.$transaction(async (tx) => {
+      await tx.rolePermission.deleteMany({ where: { tenantId, role } });
+      if (body.length) {
+        await tx.rolePermission.createMany({
+          data: body.map((p) => ({ ...p, tenantId, role })),
+        });
+      }
+    });
+    const perms = await prisma.rolePermission.findMany({ where: { tenantId, role } });
+    res.json(perms);
+  } catch (err) { next(err); }
+});
+
+// 單筆設定 / 移除（前端 toggle）
+usersRouter.patch("/role-permissions/:role/:resource/:action", requireRole("portal-admin", "super-admin", "company-admin"), async (req, res, next) => {
+  try {
+    const tenantId = requireWriteTenant(req);
+    const { role, resource, action } = req.params;
+    const { allow } = z.object({ allow: z.boolean() }).parse(req.body);
+    const perm = await prisma.rolePermission.upsert({
+      where: { tenantId_role_resource_action: { tenantId, role, resource, action } },
+      update: { allow },
+      create: { tenantId, role, resource, action, allow },
+    });
+    res.json(perm);
+  } catch (err) { next(err); }
+});
+
+usersRouter.delete("/role-permissions/:role/:resource/:action", requireRole("portal-admin", "super-admin", "company-admin"), async (req, res, next) => {
+  try {
+    const tenantId = requireWriteTenant(req);
+    const { role, resource, action } = req.params;
+    await prisma.rolePermission.deleteMany({
+      where: { tenantId, role, resource, action },
+    });
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 usersRouter.put("/:id/permissions", requireRole("portal-admin", "super-admin", "company-admin"), async (req, res, next) => {
   try {
     const tenantId = requireWriteTenant(req);

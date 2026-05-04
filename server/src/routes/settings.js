@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { permit } from "../middleware/permit.js";
 import { verifySmtp, sendMail } from "../lib/mailer.js";
 
 export const settingsRouter = Router();
@@ -31,7 +32,7 @@ settingsRouter.get("/smtp", async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-settingsRouter.put("/smtp", requireRole("company-admin"), async (req, res, next) => {
+settingsRouter.put("/smtp", permit("settings", "smtp"), async (req, res, next) => {
   try {
     const tenantId = requireWriteTenant(req);
     const body = smtpSchema.parse(req.body);
