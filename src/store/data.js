@@ -458,6 +458,12 @@ export const useData = create((set, get) => ({
     const req = await api.patch(`/equipment/requests/${id}`, patch);
     set((s) => ({ equipmentRequests: s.equipmentRequests.map((x) => x.id === id ? req : x) }));
   },
+  // PPT slide 13：產生 PDF 申請表（pdfkit）
+  generateEquipmentRequestPdf: async (id) => {
+    const req = await api.post(`/equipment/requests/${id}/generate-pdf`);
+    set((s) => ({ equipmentRequests: s.equipmentRequests.map((x) => x.id === id ? req : x) }));
+    return req;
+  },
   reviewEquipmentRequest: async (id, status, feedback, _reviewerName) => {
     const req = await api.post(`/equipment/requests/${id}/review`, { status, feedback });
     set((s) => ({ equipmentRequests: s.equipmentRequests.map((x) => x.id === id ? req : x) }));

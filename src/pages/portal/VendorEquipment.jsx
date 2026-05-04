@@ -12,6 +12,7 @@ export default function VendorEquipment({ vendor, event }) {
   const {
     eventEquipmentCatalog, equipmentRequests,
     createEquipmentRequest, updateEquipmentRequest,
+    generateEquipmentRequestPdf,
   } = useData();
 
   const catalog = useMemo(
@@ -69,14 +70,22 @@ export default function VendorEquipment({ vendor, event }) {
   const paymentFileRef = useRef(null);
   const [busy, setBusy] = useState(false);
 
-  const generatePdf = () => {
+  const generatePdf = async () => {
     if (!activeRequest) return;
-    updateEquipmentRequest(activeRequest.id, {
-      status: "pdf_generated",
-      pdfGeneratedAt: new Date().toISOString().slice(0, 10),
-    });
-    toast.info("PDF 產生功能 D3 階段補（將自動帶申請內容）");
-    setStep(2);
+    setBusy(true);
+    try {
+      const r = await generateEquipmentRequestPdf(activeRequest.id);
+      toast.success("PDF 已產生，可下載簽署");
+      setStep(2);
+      // 自動開啟新視窗下載
+      if (r.pdfUrl || r.pdfPath) {
+        window.open(api.fileUrl(r.pdfUrl || r.pdfPath), "_blank");
+      }
+    } catch (err) {
+      toast.error(`產生失敗：${err.body?.error || err.message}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onPickSigned = async (e) => {

@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
+import { generateEquipmentRequestPdf } from "../lib/pdf.js";
 
 export const equipmentRouter = Router();
 
@@ -119,6 +120,59 @@ equipmentRouter.post("/requests", async (req, res, next) => {
       },
     });
     res.status(201).json(created);
+  } catch (err) { next(err); }
+});
+
+// 產生 PDF（廠商按「產生 PDF 申請表」）
+equipmentRouter.post("/requests/:id/generate-pdf", async (req, res, next) => {
+  try {
+    const target = await prisma.equipmentRequest.findFirst({
+      where: { id: req.params.id, ...scopeWhere(req) },
+      include: {
+        vendor: true,
+        event: true,
+      },
+    });
+    if (!target) return res.status(404).json({ error: "not_found" });
+    if (target.status !== "draft" && target.status !== "pdf_generated") {
+      return res.status(409).json({ error: "invalid_status", current: target.status });
+    }
+
+    // 撈 catalog items 計算 row data
+    const catalogIds = target.items.map((i) => i.catalogId);
+    const catalogItems = await prisma.equipmentCatalogItem.findMany({
+      where: { id: { in: catalogIds } },
+    });
+    const itemMap = Object.fromEntries(catalogItems.map((c) => [c.id, c]));
+    const items = target.items.map((it) => {
+      const cat = itemMap[it.catalogId];
+      const unitPrice = cat ? Number(cat.unitPrice) : 0;
+      return {
+        name: cat?.name || it.catalogId,
+        spec: it.spec || cat?.spec || "",
+        unit: cat?.unit || "項",
+        qty: it.qty,
+        unitPrice,
+        subtotal: unitPrice * it.qty,
+      };
+    });
+
+    const result = await generateEquipmentRequestPdf({
+      request: target,
+      vendor: target.vendor,
+      event: target.event,
+      items,
+    });
+
+    const updated = await prisma.equipmentRequest.update({
+      where: { id: target.id },
+      data: {
+        status: "pdf_generated",
+        pdfGeneratedAt: new Date(),
+        pdfPath: result.url,
+      },
+    });
+    res.json({ ...updated, pdfUrl: result.url });
   } catch (err) { next(err); }
 });
 
