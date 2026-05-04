@@ -82,6 +82,14 @@ async function uploadFile(file, fieldName = "file") {
   return res.json();
 }
 
+// 把 multer 回傳的 storedPath（"/files/...") 變成下載 URL
+// dev：vite proxy 把 /api/files → backend /files
+// prod：Nginx 把 /api/files → backend，或 /files alias 直接 serve（看 DEPLOYMENT.md）
+export function fileUrl(storedPath) {
+  if (!storedPath) return null;
+  return `/api${storedPath.startsWith("/") ? storedPath : "/" + storedPath}`;
+}
+
 export const api = {
   get: (path, opts) => request("GET", path, opts),
   post: (path, body, opts) => request("POST", path, { ...opts, body }),
@@ -89,6 +97,7 @@ export const api = {
   patch: (path, body, opts) => request("PATCH", path, { ...opts, body }),
   delete: (path, opts) => request("DELETE", path, opts),
   upload: uploadFile,
+  fileUrl,
 };
 
 export { ApiError };

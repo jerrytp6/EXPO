@@ -98,8 +98,10 @@ const submitSchema = z.object({
   formId: z.string(),
   fileName: z.string().min(1),
   fileSize: z.string().nullish(),
+  storedPath: z.string().nullish(),
   fee: z.union([z.number(), z.string()]).nullish(),
   paymentProofFileName: z.string().nullish(),
+  paymentProofPath: z.string().nullish(),
   uploadedByRole: z.enum(["vendor", "decorator"]).default("vendor"),
 });
 
@@ -135,8 +137,10 @@ formsRouter.post("/submissions", async (req, res, next) => {
         formId: body.formId,
         fileName: body.fileName,
         fileSize: body.fileSize,
+        storedPath: body.storedPath,
         fee: body.fee ? String(body.fee) : null,
         paymentProofFileName: body.paymentProofFileName,
+        paymentProofPath: body.paymentProofPath,
         uploadedByRole: body.uploadedByRole,
         status,
         submittedAt: new Date(),

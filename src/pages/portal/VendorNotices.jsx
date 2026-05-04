@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useData } from "../../store/data";
 import { Icon } from "../../components/Icon";
 import { toast } from "../../store/toast";
+import { api } from "../../lib/api";
 
 // 廠商端：文件須知（閱讀 + 勾選同意）— PDF p11
 export default function VendorNotices({ vendor, event }) {
@@ -129,7 +130,11 @@ export default function VendorNotices({ vendor, event }) {
                       <div className="font-medium text-[13px] truncate">{current.attachmentName}</div>
                       <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>點擊下載附件</div>
                     </div>
-                    <button className="btn btn-sm" onClick={() => toast.info("Demo：已模擬下載")}>下載</button>
+                    {current.attachmentPath ? (
+                      <a className="btn btn-sm" href={api.fileUrl(current.attachmentPath)} target="_blank" rel="noreferrer">下載</a>
+                    ) : (
+                      <button className="btn btn-sm" onClick={() => toast.info("此須知無附件檔（請看正文）")}>下載</button>
+                    )}
                   </div>
                 </div>
               )}

@@ -231,6 +231,7 @@ model EventNotice {
   title                String
   content              String   @db.LongText
   attachmentName       String?  @map("attachment_name")
+  attachmentPath       String?  @map("attachment_path")
   requiresAck          Boolean  @default(true) @map("requires_ack")
   allowDecoratorView   Boolean  @default(false) @map("allow_decorator_view")
   sortOrder            Int      @default(0) @map("sort_order")
@@ -298,8 +299,10 @@ model FormSubmission {
   formId                String   @map("form_id")
   fileName              String   @map("file_name")
   fileSize              String?  @map("file_size")
+  storedPath            String?  @map("stored_path")             // multer 回傳的 /files/.../..  下載用
   fee                   Decimal? @db.Decimal(12, 2)
   paymentProofFileName  String?  @map("payment_proof_file_name")
+  paymentProofPath      String?  @map("payment_proof_path")
   status                String   // submitted | pending_fee_review | approved | rejected
   reviewedBy            String?  @map("reviewed_by")
   reviewedAt            DateTime? @map("reviewed_at")
@@ -349,8 +352,11 @@ model EquipmentRequest {
   totalAmount          Decimal  @db.Decimal(12, 2) @map("total_amount")
   status               String   // draft / pdf_generated / signed_uploaded / submitted / approved / rejected / paid
   pdfGeneratedAt       DateTime? @map("pdf_generated_at")
+  pdfPath              String?  @map("pdf_path")                 // 系統產生的 PDF 路徑（D3 階段）
   signedFileName       String?  @map("signed_file_name")
+  signedPath           String?  @map("signed_path")
   paymentProofFileName String?  @map("payment_proof_file_name")
+  paymentProofPath     String?  @map("payment_proof_path")
   paidAt               DateTime? @map("paid_at")
   reviewedBy           String?  @map("reviewed_by")
   reviewedAt           DateTime? @map("reviewed_at")

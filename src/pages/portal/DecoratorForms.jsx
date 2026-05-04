@@ -2,6 +2,9 @@ import { useMemo, useState } from "react";
 import { useData } from "../../store/data";
 import { Modal } from "../../components/Modal";
 import { toast } from "../../store/toast";
+import { api } from "../../lib/api";
+
+const fmtSize = (n) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`;
 
 // 裝潢廠商端：代參展廠商上傳裝潢相關表單（allowDecoratorUpload=true）
 // PDF p12「裝潢廠商入口」— 自行裝潢時的施工切結書 / 安全衛生承諾書 / 電力位置圖 等
@@ -21,7 +24,24 @@ export default function DecoratorForms({ decorator }) {
 
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState(null);
-  const [upload, setUpload] = useState({ fileName: "" });
+  const [signed, setSigned] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const r = await api.upload(file);
+      setSigned(r);
+      toast.success(`已上傳：${r.originalName}`);
+    } catch (err) {
+      toast.error(`上傳失敗：${err.body?.error || err.message}`);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
 
   // 取得此廠商在該活動可顯示的表單，並過濾「裝潢商可代上傳」
   const decoratorForms = useMemo(() => {
@@ -39,18 +59,23 @@ export default function DecoratorForms({ decorator }) {
 
   const openUpload = (f) => {
     setTarget(f);
-    setUpload({ fileName: "" });
+    setSigned(null);
     setOpen(true);
   };
-  const submit = () => {
-    if (!upload.fileName) { toast.error("請填入檔名"); return; }
-    submitForm(selected.event.id, selected.vendor.id, target.id, {
-      fileName: upload.fileName,
-      fileSize: "0.8 MB",
-      uploadedByRole: "decorator",
-    });
-    toast.success(`已代 ${selected.vendor.company} 上傳「${target.name}」`);
-    setOpen(false);
+  const submit = async () => {
+    if (!signed) { toast.error("請先選擇檔案上傳"); return; }
+    try {
+      await submitForm(selected.event.id, selected.vendor.id, target.id, {
+        fileName: signed.originalName,
+        fileSize: fmtSize(signed.size),
+        storedPath: signed.url,
+        uploadedByRole: "decorator",
+      });
+      toast.success(`已代 ${selected.vendor.company} 上傳「${target.name}」`);
+      setOpen(false);
+    } catch (err) {
+      toast.error(`送出失敗：${err.body?.error || err.message}`);
+    }
   };
 
   const statusInfo = (sub) => {
@@ -142,9 +167,14 @@ export default function DecoratorForms({ decorator }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {f.templateFileName && (
-                    <button className="btn btn-sm" onClick={() => toast.info(`Demo：下載 ${f.templateFileName}`)}>
-                      📎 下載範本
+                    <button className="btn btn-sm" onClick={() => toast.info(`範本檔由活動方提供：${f.templateFileName}`)}>
+                      📎 範本說明
                     </button>
+                  )}
+                  {sub?.storedPath && (
+                    <a className="btn btn-sm" href={api.fileUrl(sub.storedPath)} target="_blank" rel="noreferrer">
+                      📥 下載已上傳
+                    </a>
                   )}
                   {canUpload && (
                     <button className="btn btn-sm btn-primary" onClick={() => openUpload(f)}>
@@ -178,18 +208,27 @@ export default function DecoratorForms({ decorator }) {
         <label className="block text-[12px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-tertiary)" }}>
           已簽章之 {target?.name}
         </label>
-        <div className="p-4 rounded-xl border-2 border-dashed text-center mb-4" style={{ borderColor: "var(--separator-strong)" }}>
+        <label className="block p-4 rounded-xl border-2 border-dashed text-center mb-4 cursor-pointer hover:bg-[var(--bg-tinted)]"
+          style={{ borderColor: "var(--separator-strong)" }}>
           <div className="text-3xl mb-2">📄</div>
-          <input
-            className="input"
-            placeholder="檔名（Demo 用）"
-            value={upload.fileName}
-            onChange={(e) => setUpload({ ...upload, fileName: e.target.value })}
-          />
-        </div>
+          {signed ? (
+            <div className="text-[13px]">
+              <div className="font-semibold">{signed.originalName}</div>
+              <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>{fmtSize(signed.size)} · 點擊重選</div>
+            </div>
+          ) : (
+            <>
+              <div className="text-[13px] font-medium mb-1">點擊或拖放選擇檔案</div>
+              <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>接受 {target?.formats} · ≤ 10MB</div>
+            </>
+          )}
+          <input type="file" accept={target?.formats} className="hidden" onChange={onPickFile} />
+        </label>
         <div className="flex justify-end gap-2">
           <button className="btn" onClick={() => setOpen(false)}>取消</button>
-          <button className="btn btn-primary" onClick={submit}>送出上傳</button>
+          <button className="btn btn-primary" disabled={uploading} onClick={submit}>
+            {uploading ? "上傳中…" : "送出上傳"}
+          </button>
         </div>
       </Modal>
     </>

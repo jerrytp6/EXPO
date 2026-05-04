@@ -411,8 +411,10 @@ export const useData = create((set, get) => ({
       vendorId, formId,
       fileName: payload.fileName,
       fileSize: payload.fileSize,
+      storedPath: payload.storedPath,
       fee: payload.fee,
       paymentProofFileName: payload.paymentProofFileName,
+      paymentProofPath: payload.paymentProofPath,
       uploadedByRole: payload.uploadedByRole || "vendor",
     });
     set((s) => ({ formSubmissions: [...s.formSubmissions, sub] }));

@@ -4,6 +4,7 @@ import { useData } from "../../store/data";
 import { SceneHead, Panel, DataRow, Field } from "../../components/Scene";
 import { Modal } from "../../components/Modal";
 import { toast } from "../../store/toast";
+import { api } from "../../lib/api";
 
 const CATEGORIES = ["會場資訊", "進場", "費用", "裝潢", "配備", "設備", "議程", "須知", "展前", "申請", "其他"];
 
@@ -19,9 +20,27 @@ export default function Notices() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
     category: "其他", title: "", content: "",
-    requiresAck: true, allowDecoratorView: false, attachmentName: "",
+    requiresAck: true, allowDecoratorView: false,
+    attachmentName: "", attachmentPath: "",
     sortOrder: 0,
   });
+  const [uploading, setUploading] = useState(false);
+
+  const onPickAttachment = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const r = await api.upload(file);
+      setForm((f) => ({ ...f, attachmentName: r.originalName, attachmentPath: r.url }));
+      toast.success(`已上傳：${r.originalName}`);
+    } catch (err) {
+      toast.error(`上傳失敗：${err.body?.error || err.message}`);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
 
   const ackStats = useMemo(() => {
     const total = eventVendors.length;
@@ -36,7 +55,7 @@ export default function Notices() {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ category: "其他", title: "", content: "", requiresAck: true, allowDecoratorView: false, attachmentName: "", sortOrder: notices.length + 1 });
+    setForm({ category: "其他", title: "", content: "", requiresAck: true, allowDecoratorView: false, attachmentName: "", attachmentPath: "", sortOrder: notices.length + 1 });
     setOpen(true);
   };
   const openEdit = (n) => {
@@ -44,7 +63,8 @@ export default function Notices() {
     setForm({
       category: n.category, title: n.title, content: n.content,
       requiresAck: n.requiresAck, allowDecoratorView: n.allowDecoratorView,
-      attachmentName: n.attachmentName || "", sortOrder: n.sortOrder,
+      attachmentName: n.attachmentName || "", attachmentPath: n.attachmentPath || "",
+      sortOrder: n.sortOrder,
     });
     setOpen(true);
   };
@@ -174,8 +194,24 @@ export default function Notices() {
         <Field label="內容">
           <textarea className="input" rows={8} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
         </Field>
-        <Field label="附件檔名（選填）" hint="Demo 模式：實際檔案略">
-          <input className="input" value={form.attachmentName} onChange={(e) => setForm({ ...form, attachmentName: e.target.value })} placeholder="map.pdf" />
+        <Field label="附件（選填）" hint="廠商可下載的補充檔（PDF / 圖檔等）">
+          <div className="flex items-center gap-3">
+            <label className="btn btn-sm cursor-pointer">
+              {uploading ? "上傳中…" : "📎 選擇檔案"}
+              <input type="file" className="hidden" onChange={onPickAttachment} disabled={uploading} />
+            </label>
+            {form.attachmentName && (
+              <>
+                <a className="text-[12px] underline" href={api.fileUrl(form.attachmentPath)} target="_blank" rel="noreferrer">
+                  {form.attachmentName}
+                </a>
+                <button className="text-[12px]" style={{ color: "var(--red)" }}
+                  onClick={() => setForm({ ...form, attachmentName: "", attachmentPath: "" })}>
+                  清除
+                </button>
+              </>
+            )}
+          </div>
         </Field>
         <div className="flex items-center gap-6 mt-2">
           <label className="flex items-center gap-2 text-[14px]">

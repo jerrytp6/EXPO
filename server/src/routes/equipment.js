@@ -139,8 +139,11 @@ equipmentRouter.patch("/requests/:id", async (req, res, next) => {
     const body = z.object({
       status: z.string().optional(),
       signedFileName: z.string().nullish(),
+      signedPath: z.string().nullish(),
       paymentProofFileName: z.string().nullish(),
+      paymentProofPath: z.string().nullish(),
       pdfGeneratedAt: z.string().nullish(),
+      pdfPath: z.string().nullish(),
     }).parse(req.body);
 
     if (body.status) {

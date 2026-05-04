@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useData } from "../../store/data";
 import { Icon } from "../../components/Icon";
 import { toast } from "../../store/toast";
+import { api } from "../../lib/api";
+
+const fmtSize = (n) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`;
 
 // 廠商端：設備申請 — PDF p13
 // 瀏覽目錄 → 選擇數量 → 產生 PDF → 下載簽章 → 上傳 + 匯款單 → 審核
@@ -62,32 +65,60 @@ export default function VendorEquipment({ vendor, event }) {
     setStep(2);
   };
 
+  const signedFileRef = useRef(null);
+  const paymentFileRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
   const generatePdf = () => {
     if (!activeRequest) return;
     updateEquipmentRequest(activeRequest.id, {
       status: "pdf_generated",
       pdfGeneratedAt: new Date().toISOString().slice(0, 10),
     });
-    toast.success("PDF 已產生（Demo 模擬）");
+    toast.info("PDF 產生功能 D3 階段補（將自動帶申請內容）");
     setStep(2);
   };
-  const uploadSigned = () => {
-    if (!activeRequest) return;
-    updateEquipmentRequest(activeRequest.id, {
-      status: "signed_uploaded",
-      signedFileName: `${vendor.company}-設備申請-簽.pdf`,
-    });
-    toast.success("已上傳簽署檔");
-    setStep(3);
+
+  const onPickSigned = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeRequest) return;
+    setBusy(true);
+    try {
+      const r = await api.upload(file);
+      await updateEquipmentRequest(activeRequest.id, {
+        status: "signed_uploaded",
+        signedFileName: r.originalName,
+        signedPath: r.url,
+      });
+      toast.success(`已上傳簽署檔：${r.originalName}`);
+      setStep(3);
+    } catch (err) {
+      toast.error(`上傳失敗：${err.body?.error || err.message}`);
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
   };
-  const uploadPayment = () => {
-    if (!activeRequest) return;
-    updateEquipmentRequest(activeRequest.id, {
-      status: "submitted",
-      paymentProofFileName: `${vendor.company}-匯款單.jpg`,
-    });
-    toast.success("已上傳匯款單，等待管理員審核");
-    setStep(4);
+
+  const onPickPayment = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeRequest) return;
+    setBusy(true);
+    try {
+      const r = await api.upload(file);
+      await updateEquipmentRequest(activeRequest.id, {
+        status: "submitted",
+        paymentProofFileName: r.originalName,
+        paymentProofPath: r.url,
+      });
+      toast.success(`已上傳匯款單：${r.originalName}，等待管理員審核`);
+      setStep(4);
+    } catch (err) {
+      toast.error(`上傳失敗：${err.body?.error || err.message}`);
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
   };
 
   const STATUS_LABEL = {
@@ -165,12 +196,27 @@ export default function VendorEquipment({ vendor, event }) {
               )}
               {activeRequest.status === "pdf_generated" && (
                 <>
-                  <button className="btn" onClick={() => toast.info("Demo：下載 PDF")}>下載 PDF</button>
-                  <button className="btn btn-primary" onClick={uploadSigned}>上傳已簽檔</button>
+                  {activeRequest.pdfPath ? (
+                    <a className="btn" href={api.fileUrl(activeRequest.pdfPath)} target="_blank" rel="noreferrer">下載 PDF</a>
+                  ) : (
+                    <button className="btn" onClick={() => toast.info("PDF 產生功能 D3 階段補")}>下載 PDF</button>
+                  )}
+                  <button className="btn btn-primary" disabled={busy} onClick={() => signedFileRef.current?.click()}>
+                    {busy ? "上傳中…" : "上傳已簽檔"}
+                  </button>
+                  <input ref={signedFileRef} type="file" accept=".pdf,.jpg,.png" className="hidden" onChange={onPickSigned} />
                 </>
               )}
               {activeRequest.status === "signed_uploaded" && (
-                <button className="btn btn-primary" onClick={uploadPayment}>上傳匯款單</button>
+                <>
+                  {activeRequest.signedPath && (
+                    <a className="btn btn-sm" href={api.fileUrl(activeRequest.signedPath)} target="_blank" rel="noreferrer">查看已簽檔</a>
+                  )}
+                  <button className="btn btn-primary" disabled={busy} onClick={() => paymentFileRef.current?.click()}>
+                    {busy ? "上傳中…" : "上傳匯款單"}
+                  </button>
+                  <input ref={paymentFileRef} type="file" accept=".pdf,.jpg,.png" className="hidden" onChange={onPickPayment} />
+                </>
               )}
               {activeRequest.status === "approved" && (
                 <span className="chip chip-green">✓ 審核已通過</span>

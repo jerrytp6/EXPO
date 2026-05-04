@@ -3,9 +3,12 @@ import { useData } from "../../store/data";
 import { Icon } from "../../components/Icon";
 import { Modal } from "../../components/Modal";
 import { toast } from "../../store/toast";
+import { api } from "../../lib/api";
+
+const fmtSize = (n) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`;
 
 // 廠商端：表單下載-簽署-上傳 — PDF p12
-// 支援條件顯示（自行裝潢才出現）、含費用時需上傳匯款單
+// D2：改用 multer 真實上傳（api.upload）
 export default function VendorForms({ vendor, event }) {
   const { eventForms, formSubmissions, getFormsForVendor, submitForm, confirmFormSubmission } = useData();
 
@@ -13,9 +16,12 @@ export default function VendorForms({ vendor, event }) {
 
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState(null);
-  const [upload, setUpload] = useState({ fileName: "", fileSize: "", fee: "", paymentProofFileName: "", skip: false });
+  const [uploading, setUploading] = useState(false);
+  const [signed, setSigned] = useState(null);     // { storedPath, originalName, size }
+  const [proof, setProof] = useState(null);       // 匯款單
+  const [fee, setFee] = useState("");
+  const [skip, setSkip] = useState(false);
 
-  // 取得某表單的最新繳交紀錄
   const latestSub = (formId) => {
     const subs = (formSubmissions || []).filter((s) => s.eventId === event.id && s.vendorId === vendor.id && s.formId === formId);
     return subs.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))[0] || null;
@@ -23,27 +29,63 @@ export default function VendorForms({ vendor, event }) {
 
   const openUpload = (f) => {
     setTarget(f);
-    setUpload({ fileName: "", fileSize: "0.8 MB", fee: "", paymentProofFileName: "", skip: false });
+    setSigned(null); setProof(null); setFee(""); setSkip(false);
     setOpen(true);
   };
 
-  const submit = () => {
-    if (upload.skip) {
+  const onPickSigned = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const r = await api.upload(file);
+      setSigned(r);
+      toast.success(`已上傳：${r.originalName}`);
+    } catch (err) {
+      toast.error(`上傳失敗：${err.body?.error || err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onPickProof = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const r = await api.upload(file);
+      setProof(r);
+      toast.success(`匯款單已上傳：${r.originalName}`);
+    } catch (err) {
+      toast.error(`上傳失敗：${err.body?.error || err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const submit = async () => {
+    if (skip) {
       toast.success(`已回覆：不需要此項目`);
       setOpen(false);
       return;
     }
-    if (!upload.fileName) { toast.error("請選擇檔案"); return; }
-    if (target.hasFee && !upload.paymentProofFileName) { toast.error("含費用項目，請一併上傳匯款單"); return; }
-    submitForm(event.id, vendor.id, target.id, {
-      fileName: upload.fileName,
-      fileSize: upload.fileSize || "0.8 MB",
-      fee: target.hasFee ? parseInt(upload.fee || "0") : null,
-      paymentProofFileName: target.hasFee ? upload.paymentProofFileName : null,
-      uploadedByRole: "vendor",
-    });
-    toast.success(`已上傳：${target.name}`);
-    setOpen(false);
+    if (!signed) { toast.error("請選擇檔案上傳"); return; }
+    if (target.hasFee && !proof) { toast.error("含費用項目，請一併上傳匯款單"); return; }
+    try {
+      await submitForm(event.id, vendor.id, target.id, {
+        fileName: signed.originalName,
+        fileSize: fmtSize(signed.size),
+        storedPath: signed.url,
+        fee: target.hasFee ? parseInt(fee || "0") : null,
+        paymentProofFileName: target.hasFee ? proof.originalName : null,
+        paymentProofPath: target.hasFee ? proof.url : null,
+        uploadedByRole: "vendor",
+      });
+      toast.success(`已送出：${target.name}`);
+      setOpen(false);
+    } catch (err) {
+      toast.error(`送出失敗：${err.body?.error || err.message}`);
+    }
   };
 
   const statusInfo = (sub, f) => {
@@ -134,9 +176,14 @@ export default function VendorForms({ vendor, event }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {f.templateFileName && (
-                    <button className="btn btn-sm" onClick={() => toast.info(`Demo：下載 ${f.templateFileName}`)}>
-                      📎 下載範本
+                    <button className="btn btn-sm" onClick={() => toast.info(`範本檔由活動方提供：${f.templateFileName}`)}>
+                      📎 範本說明
                     </button>
+                  )}
+                  {sub?.storedPath && (
+                    <a className="btn btn-sm" href={api.fileUrl(sub.storedPath)} target="_blank" rel="noreferrer">
+                      📥 下載已上傳
+                    </a>
                   )}
                   {canUpload && (
                     <button className="btn btn-sm btn-primary" onClick={() => openUpload(f)}>
@@ -169,8 +216,8 @@ export default function VendorForms({ vendor, event }) {
             <input
               type="checkbox"
               id="skip"
-              checked={upload.skip}
-              onChange={(e) => setUpload({ ...upload, skip: e.target.checked })}
+              checked={skip}
+              onChange={(e) => setSkip(e.target.checked)}
               className="mt-1"
             />
             <label htmlFor="skip" className="text-[14px]">
@@ -182,24 +229,27 @@ export default function VendorForms({ vendor, event }) {
           </div>
         )}
 
-        {!upload.skip && (
+        {!skip && (
           <>
             <div className="mb-4">
               <label className="block text-[12px] font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-tertiary)" }}>
                 已簽章之 {target?.name}
               </label>
-              <div className="p-4 rounded-xl border-2 border-dashed text-center" style={{ borderColor: "var(--separator-strong)" }}>
+              <label className="block p-4 rounded-xl border-2 border-dashed text-center cursor-pointer hover:bg-[var(--bg-tinted)]" style={{ borderColor: "var(--separator-strong)" }}>
                 <div className="text-3xl mb-2">📄</div>
-                <input
-                  className="input"
-                  placeholder="檔名（Demo 用）例：切結書-已簽.pdf"
-                  value={upload.fileName}
-                  onChange={(e) => setUpload({ ...upload, fileName: e.target.value })}
-                />
-                <div className="text-[11px] mt-2" style={{ color: "var(--text-tertiary)" }}>
-                  接受格式：{target?.formats}
-                </div>
-              </div>
+                {signed ? (
+                  <div className="text-[13px]">
+                    <div className="font-semibold">{signed.originalName}</div>
+                    <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>{fmtSize(signed.size)} · 點擊重選</div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-[13px] font-medium mb-1">點擊或拖放選擇檔案</div>
+                    <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>接受 {target?.formats} · ≤ 10MB</div>
+                  </>
+                )}
+                <input type="file" accept={target?.formats} className="hidden" onChange={onPickSigned} />
+              </label>
             </div>
 
             {target?.hasFee && (
@@ -208,31 +258,22 @@ export default function VendorForms({ vendor, event }) {
                   <span className="chip chip-orange">💰 含費用</span>
                   <span className="text-[13px] font-semibold">請一併上傳匯款證明</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 mb-3">
                   <div>
                     <label className="block text-[11px] font-semibold uppercase mb-1" style={{ color: "var(--text-tertiary)" }}>
                       金額 NT$
                     </label>
-                    <input
-                      className="input"
-                      type="number"
-                      value={upload.fee}
-                      onChange={(e) => setUpload({ ...upload, fee: e.target.value })}
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold uppercase mb-1" style={{ color: "var(--text-tertiary)" }}>
-                      匯款單檔名
-                    </label>
-                    <input
-                      className="input"
-                      value={upload.paymentProofFileName}
-                      onChange={(e) => setUpload({ ...upload, paymentProofFileName: e.target.value })}
-                      placeholder="匯款單.jpg"
-                    />
+                    <input className="input" type="number" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="0" />
                   </div>
                 </div>
+                <label className="block p-3 rounded-lg border-2 border-dashed text-center cursor-pointer text-[12px]" style={{ borderColor: "rgba(255,159,10,0.4)" }}>
+                  {proof ? (
+                    <span>📎 {proof.originalName} ({fmtSize(proof.size)}) · 點擊重選</span>
+                  ) : (
+                    <span>📤 點擊上傳匯款單（.pdf / .jpg / .png）</span>
+                  )}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={onPickProof} />
+                </label>
               </div>
             )}
           </>
@@ -240,8 +281,8 @@ export default function VendorForms({ vendor, event }) {
 
         <div className="flex justify-end gap-2 mt-2">
           <button className="btn" onClick={() => setOpen(false)}>取消</button>
-          <button className="btn btn-primary" onClick={submit}>
-            {upload.skip ? "回覆不需要" : "送出上傳"}
+          <button className="btn btn-primary" disabled={uploading} onClick={submit}>
+            {uploading ? "上傳中…" : skip ? "回覆不需要" : "送出"}
           </button>
         </div>
       </Modal>

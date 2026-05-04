@@ -14,6 +14,7 @@ const noticeSchema = z.object({
   title: z.string().min(1),
   content: z.string(),
   attachmentName: z.string().nullish(),
+  attachmentPath: z.string().nullish(),
   requiresAck: z.boolean().default(true),
   allowDecoratorView: z.boolean().default(false),
   sortOrder: z.number().int().default(0),
