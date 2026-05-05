@@ -7,6 +7,7 @@ import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
 import { parseListOpts, sendList } from "../lib/list-query.js";
 import { rowsToCsv, sendCsv } from "../lib/csv.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
+import { notify } from "../lib/notify.js";
 import { generateEquipmentRequestPdf } from "../lib/pdf.js";
 
 export const equipmentRouter = Router();
@@ -258,6 +259,21 @@ equipmentRouter.patch("/requests/:id", async (req, res, next) => {
     else if (body.status === "pdf_generated") data.pdfGeneratedAt = new Date();
 
     const updated = await prisma.equipmentRequest.update({ where: { id: req.params.id }, data });
+
+    // F2：廠商完成繳交（payment proof 上傳 → submitted）通知管理者
+    if (body.status === "submitted") {
+      const vendor = await prisma.vendor.findUnique({ where: { id: target.vendorId }, select: { company: true } });
+      notify({
+        tenantId: target.tenantId,
+        eventId: target.eventId,
+        type: "equipment_submitted",
+        title: `${vendor?.company || "廠商"} 提交設備申請`,
+        body: `總金額 NT$ ${Number(target.totalAmount).toLocaleString()}，等待審核`,
+        link: `/event/${target.eventId}/equipment`,
+        targetRole: "event-manager",
+      }).catch(() => {});
+    }
+
     res.json(updated);
   } catch (err) { next(err); }
 });

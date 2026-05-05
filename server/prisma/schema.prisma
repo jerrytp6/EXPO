@@ -59,6 +59,7 @@ model User {
 
   managedEvents Event[]              @relation("EventManager")
   permissions   MemberPermOverride[]
+  notifications Notification[]
 
   @@index([tenantId])
   @@map("users")
@@ -647,6 +648,26 @@ model Activity {
   @@index([vendorId])
   @@index([at])
   @@map("activities")
+}
+
+// F2：In-app notifications（鈴鐺）
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String?  @map("tenant_id")
+  userId    String   @map("user_id")
+  eventId   String?  @map("event_id")
+  type      String   // form_submitted / equipment_submitted / vendor_rsvp / ...
+  title     String
+  body      String?  @db.Text
+  link      String?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
 
 // E7：寄信記錄

@@ -4,6 +4,7 @@ import { useAuth, ROLE_NAMES } from "../store/auth";
 import { useData } from "../store/data";
 import { Icon } from "./Icon";
 import { toast } from "../store/toast";
+import NotificationBell from "./NotificationBell";
 
 // 各角色的靜態側邊選單（對齊客戶 13 模組 + PDF 架構）
 const MENU = {
@@ -218,7 +219,8 @@ export function AppLayout({ children }) {
             <span>/</span>
             <strong className="text-ink-primary font-semibold">{ROLE_NAMES[user.role]}</strong>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <NotificationBell />
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-display font-medium"
               style={{ background: "rgba(48, 209, 88, 0.1)", color: "#1f8a3a" }}>
               <span className="live-dot" />

@@ -7,6 +7,7 @@ import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
 import { parseListOpts, sendList } from "../lib/list-query.js";
 import { rowsToCsv, sendCsv } from "../lib/csv.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
+import { notify } from "../lib/notify.js";
 
 export const formsRouter = Router();
 
@@ -194,6 +195,19 @@ formsRouter.post("/submissions", async (req, res, next) => {
     await prisma.submissionLog.create({
       data: { tenantId: form.tenantId, submissionId: sub.id, action: "submitted", note: status },
     });
+
+    // F2 通知活動管理者：有新的待審
+    const vendor = await prisma.vendor.findUnique({ where: { id: body.vendorId }, select: { company: true } });
+    notify({
+      tenantId: form.tenantId,
+      eventId: form.eventId,
+      type: status === "pending_fee_review" ? "form_fee_review" : "form_submitted",
+      title: `${vendor?.company || "廠商"} 提交「${form.name}」`,
+      body: status === "pending_fee_review" ? "含費用，需審核匯款單" : null,
+      link: `/event/${form.eventId}/form-review`,
+      targetRole: "event-manager",
+    }).catch(() => {});
+
     res.status(201).json(sub);
   } catch (err) { next(err); }
 });

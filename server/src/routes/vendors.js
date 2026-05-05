@@ -10,6 +10,7 @@ import { parseListOpts, sendList } from "../lib/list-query.js";
 import { rowsToCsv, sendCsv } from "../lib/csv.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
 import { eventBus } from "../lib/event-bus.js";
+import { notify } from "../lib/notify.js";
 
 export const vendorsRouter = Router();
 export const publicVendorsRouter = Router(); // 不掛 auth — 公開 token 流程
@@ -361,6 +362,18 @@ publicVendorsRouter.post("/rsvp/:token", async (req, res, next) => {
       });
       return vendor;
     });
+
+    // F2 通知：RSVP 結果通知活動管理者
+    notify({
+      tenantId: inv.tenantId,
+      eventId: inv.eventId,
+      type: body.response === "accepted" ? "vendor_rsvp_accepted" : "vendor_rsvp_declined",
+      title: `${result.company} ${body.response === "accepted" ? "接受邀約" : "婉拒邀約"}`,
+      body: body.response === "declined" && body.reason ? `原因：${body.reason}` : null,
+      link: `/event/${inv.eventId}/vendors`,
+      targetRole: "event-manager",
+    }).catch(() => {});
+
     res.json(result);
   } catch (err) { next(err); }
 });

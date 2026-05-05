@@ -43,11 +43,18 @@ function sseHandler(req, res) {
     if (req.tenantId && !req.isCrossTenant && payload.tenantId !== req.tenantId) return;
     res.write(`event: activity\ndata: ${JSON.stringify(payload.activity)}\n\n`);
   };
+  // F2：notifications 給對應 user
+  const notifHandler = (payload) => {
+    if (payload.userId !== req.user.userId) return;
+    res.write(`event: notification\ndata: ${JSON.stringify(payload.notification)}\n\n`);
+  };
   eventBus.on("activity", handler);
+  eventBus.on("notification", notifHandler);
 
   req.on("close", () => {
     clearInterval(heartbeat);
     eventBus.off("activity", handler);
+    eventBus.off("notification", notifHandler);
   });
 }
 
