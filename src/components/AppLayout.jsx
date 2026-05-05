@@ -53,6 +53,7 @@ function getEventSubMenu(eventId) {
   const base = `/event/${eventId}`;
   return [
     { to: `${base}/vendors`,           label: "參展商管理",     icon: "users" },
+    { to: `${base}/roster`,            label: "參展名單",       icon: "user_check" },
     { to: `${base}/recruit`,           label: "廠商招展",       icon: "send" },
     { to: `${base}/import`,            label: "匯入廠商",       icon: "upload" },
     { to: `${base}/booths`,            label: "攤位配置",       icon: "building" },

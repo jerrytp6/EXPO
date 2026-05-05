@@ -93,8 +93,13 @@ const subsystemSchema = z.object({
   contractEnd: z.string().datetime().nullish(),
 });
 
-tenantsRouter.get("/:id/subsystems", requireRole("portal-admin", "super-admin"), async (req, res, next) => {
+// 子系統訂閱讀取：跨租戶角色可讀任意 tenant；一般角色只能讀自己 tenant
+tenantsRouter.get("/:id/subsystems", async (req, res, next) => {
   try {
+    const isCross = ["portal-admin", "super-admin"].includes(req.user.role);
+    if (!isCross && req.user.tenantId !== req.params.id) {
+      return res.status(403).json({ error: "forbidden_tenant" });
+    }
     const subs = await prisma.tenantSubsystem.findMany({ where: { tenantId: req.params.id } });
     res.json(subs);
   } catch (err) { next(err); }

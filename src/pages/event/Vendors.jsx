@@ -5,7 +5,6 @@ import { useData } from "../../store/data";
 import { SceneHead, Panel, DataRow, StatGrid } from "../../components/Scene";
 import { Icon } from "../../components/Icon";
 import { toast } from "../../store/toast";
-import { api } from "../../lib/api";
 
 const VENDOR_STATUS = {
   pending:    { label: "未寄送",     cls: "badge-gray" },
@@ -21,7 +20,7 @@ export default function Vendors() {
   const { events, vendors, confirmVendors } = useData();
   const event = events.find((e) => e.id === eventId);
 
-  const [tab, setTab] = useState("roster"); // roster(參展名單) | pending(待匯入) | all(全部)
+  const [tab, setTab] = useState("pending"); // pending(待匯入) | all(全部)
   const [selected, setSelected] = useState(new Set());
 
   if (!event) return <Navigate to="/event" replace />;
@@ -31,7 +30,6 @@ export default function Vendors() {
   const pendingConfirm = list.filter((v) => v.status === "registered" && !v.confirmStatus);
 
   const filtered =
-    tab === "roster" ? roster :
     tab === "pending" ? pendingConfirm :
     list;
 
@@ -49,33 +47,10 @@ export default function Vendors() {
     confirmVendors(ids, "confirmed", user.name, "");
     toast.success(`已加入參展名單：${ids.length} 家`);
     setSelected(new Set());
-    setTab("roster");
-  };
-
-  const removeFromRoster = (ids) => {
-    confirmVendors(ids, null, null, "");
-    toast.info(`已從參展名單移除：${ids.length} 家`);
-    setSelected(new Set());
-  };
-
-  // E5：CSV 匯出（後端產生，欄位完整 + filter 兼容）
-  const exportCSV = async () => {
-    if (roster.length === 0) { toast.error("參展名單為空"); return; }
-    try {
-      await api.download(
-        `/vendors/export.csv?eventId=${eventId}&confirmStatus=confirmed`,
-        `${event.name}-參展名單.csv`,
-      );
-      toast.success(`已匯出 ${roster.length} 筆`);
-    } catch (err) {
-      toast.error(`匯出失敗：${err.body?.error || err.message}`);
-    }
   };
 
   // 在 pending tab 中，selected 裡未確認的
   const selectedPending = Array.from(selected).filter((id) => pendingConfirm.find((v) => v.id === id));
-  // 在 roster tab 中，selected 裡已確認的
-  const selectedRoster = Array.from(selected).filter((id) => roster.find((v) => v.id === id));
 
   return (
     <>
@@ -94,11 +69,10 @@ export default function Vendors() {
         ]}
       />
 
-      {/* Tab 切換 */}
+      {/* Tab 切換（roster 已搬到側邊欄獨立 page）*/}
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-1 p-1 rounded-xl" style={{ background: "rgba(0,0,0,0.05)", display: "inline-flex" }}>
           {[
-            { id: "roster",  label: `參展名單 (${roster.length})` },
             { id: "pending", label: `待匯入 (${pendingConfirm.length})` },
             { id: "all",     label: `全部 (${list.length})` },
           ].map((t) => (
@@ -115,9 +89,7 @@ export default function Vendors() {
           ))}
         </div>
         <div className="flex gap-2">
-          {tab === "roster" && (
-            <button className="btn btn-ghost" onClick={exportCSV}>匯出 CSV</button>
-          )}
+          <Link to={`/event/${eventId}/roster`} className="btn btn-ghost">參展名單 ({roster.length}) →</Link>
           <Link to={`/event/${eventId}/import`} className="btn btn-ghost">匯入廠商</Link>
           <Link to={`/event/${eventId}/invite`} className="btn btn-ghost">寄送邀請</Link>
         </div>
@@ -153,20 +125,6 @@ export default function Vendors() {
         </div>
       )}
 
-      {/* roster tab 的批次移除 */}
-      {tab === "roster" && selectedRoster.length > 0 && (
-        <div className="flex items-center gap-3 p-3 mb-4 rounded-xl"
-          style={{ background: "rgba(255,59,48,0.06)", border: "1px solid rgba(255,59,48,0.2)" }}>
-          <span className="text-[13px]" style={{ color: "var(--red)" }}>
-            已選 {selectedRoster.length} 家
-          </span>
-          <button className="btn btn-ghost !py-1.5 !text-xs ml-auto"
-            onClick={() => { if (confirm(`確定將 ${selectedRoster.length} 家移出參展名單？`)) removeFromRoster(selectedRoster); }}>
-            移出名單
-          </button>
-        </div>
-      )}
-
       <Panel>
         <DataRow
           header
@@ -182,14 +140,13 @@ export default function Vendors() {
             { content: "聯絡人", w: "1fr" },
             { content: "Email", w: "1.8fr" },
             { content: "展位", w: "0.8fr" },
-            { content: tab === "roster" ? "確認日期" : "報名狀態", w: "1fr" },
+            { content: "報名狀態", w: "1fr" },
             { content: "", w: "0.8fr" },
           ]}
         />
         {filtered.length === 0 ? (
           <div className="py-10 text-center text-[13px]" style={{ color: "var(--text-tertiary)" }}>
-            {tab === "roster" ? "參展名單為空 — 請到「待匯入」將已報名廠商加入" :
-             tab === "pending" ? "沒有待匯入的廠商" : "尚無任何廠商"}
+            {tab === "pending" ? "沒有待匯入的廠商" : "尚無任何廠商"}
           </div>
         ) : filtered.map((v) => {
           const st = VENDOR_STATUS[v.status] || VENDOR_STATUS.pending;
@@ -212,21 +169,11 @@ export default function Vendors() {
                 { content: v.contact, w: "1fr" },
                 { content: <span className="font-display text-[12px]">{v.email}</span>, w: "1.8fr" },
                 { content: <span className="font-display text-[12px]">{v.boothNumber || "—"}</span>, w: "0.8fr" },
-                {
-                  content: tab === "roster"
-                    ? <span className="font-display text-[12px]">{v.confirmedAt || "—"}</span>
-                    : <span className={`badge ${st.cls}`}>{st.label}</span>,
-                  w: "1fr",
-                },
+                { content: <span className={`badge ${st.cls}`}>{st.label}</span>, w: "1fr" },
                 {
                   content: tab === "pending" ? (
                     <button className="btn btn-primary !py-1 !text-xs" onClick={() => addToRoster([v.id])}>
                       加入名單
-                    </button>
-                  ) : tab === "roster" ? (
-                    <button className="btn btn-ghost !py-1 !text-xs"
-                      onClick={() => { if (confirm(`移出「${v.company}」？`)) removeFromRoster([v.id]); }}>
-                      移出
                     </button>
                   ) : v.status === "registered" && !v.confirmStatus ? (
                     <button className="btn btn-primary !py-1 !text-xs" onClick={() => addToRoster([v.id])}>

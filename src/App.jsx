@@ -37,6 +37,7 @@ import Smtp from "./pages/company/Smtp";
 
 import MyEvents from "./pages/event/MyEvents";
 import Vendors from "./pages/event/Vendors";
+import Roster from "./pages/event/Roster";
 import ImportVendors from "./pages/event/Import";
 import Invite from "./pages/event/Invite";
 import Recruit from "./pages/event/Recruit";
@@ -126,6 +127,7 @@ export default function App() {
         {/* Event Manager（活動層 — 客戶模組 #1～#8） */}
         <Route path="/event"                                element={<Protected role="event-manager"><MyEvents /></Protected>} />
         <Route path="/event/:eventId/vendors"               element={<Protected role="event-manager"><Vendors /></Protected>} />
+        <Route path="/event/:eventId/roster"                element={<Protected role="event-manager"><Roster /></Protected>} />
         <Route path="/event/:eventId/recruit"               element={<Protected role="event-manager"><Recruit /></Protected>} />
         <Route path="/event/:eventId/import"                element={<Protected role="event-manager"><ImportVendors /></Protected>} />
         <Route path="/event/:eventId/invite"                element={<Protected role="event-manager"><Invite /></Protected>} />
