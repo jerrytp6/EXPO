@@ -649,6 +649,27 @@ model Activity {
   @@map("activities")
 }
 
+// E7：寄信記錄
+model EmailLog {
+  id         String   @id @default(cuid())
+  tenantId   String?  @map("tenant_id")          // _system 級別寄信可為 null
+  eventId    String?  @map("event_id")
+  vendorId   String?  @map("vendor_id")
+  trigger    String?                              // invitation / form_approved / password_reset / ...
+  toAddress  String   @map("to_address")
+  subject    String
+  status     String   // sent / failed / no_template
+  error      String?
+  messageId  String?  @map("message_id")
+  sentAt     DateTime @default(now()) @map("sent_at")
+
+  @@index([tenantId, sentAt])
+  @@index([eventId])
+  @@index([toAddress])
+  @@index([status])
+  @@map("email_logs")
+}
+
 model SubmissionLog {
   id           String   @id @default(cuid())
   tenantId     String   @map("tenant_id")

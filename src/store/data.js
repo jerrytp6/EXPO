@@ -164,6 +164,15 @@ export const useData = create((set, get) => ({
     set({ activities: items });
     return items;
   },
+  // E7：寄信記錄
+  emailLogs: [],
+  fetchEmailLogs: async (filters = {}) => {
+    const params = new URLSearchParams(filters).toString();
+    const items = await api.get(`/audit/email-logs${params ? "?" + params : ""}`).catch(() => []);
+    set({ emailLogs: items });
+    return items;
+  },
+
   fetchSubmissionLogs: async (submissionId) => {
     if (!submissionId) return [];
     const logs = await api.get(`/audit/submission-logs/${submissionId}`).catch(() => []);

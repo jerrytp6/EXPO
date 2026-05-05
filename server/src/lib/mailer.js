@@ -63,10 +63,32 @@ export function renderTemplate(template, vars) {
   });
 }
 
+// 寫 email_log（不阻塞主流程，失敗只 console.warn）
+async function writeLog({ tenantId, eventId, vendorId, trigger, to, subject, status, error, messageId }) {
+  try {
+    await prisma.emailLog.create({
+      data: {
+        tenantId: tenantId === "_system" ? null : (tenantId || null),
+        eventId: eventId || null,
+        vendorId: vendorId || null,
+        trigger: trigger || null,
+        toAddress: to || "",
+        subject: subject || "",
+        status,
+        error: error || null,
+        messageId: messageId || null,
+      },
+    });
+  } catch (err) {
+    console.warn("[mailer] failed to write email_log:", err.message);
+  }
+}
+
 // 直接寄信
-export async function sendMail({ tenantId, to, subject, html, text, replyTo }) {
+export async function sendMail({ tenantId, to, subject, html, text, replyTo, eventId, vendorId, trigger }) {
   if (!to) {
     console.warn("[mailer] sendMail: no recipient");
+    await writeLog({ tenantId, eventId, vendorId, trigger, to, subject, status: "failed", error: "no_recipient" });
     return { sent: false, reason: "no_recipient" };
   }
   try {
@@ -80,9 +102,11 @@ export async function sendMail({ tenantId, to, subject, html, text, replyTo }) {
       text: text || (html ? html.replace(/<[^>]+>/g, "") : ""),
       replyTo,
     });
+    await writeLog({ tenantId, eventId, vendorId, trigger, to, subject, status: "sent", messageId: info.messageId });
     return { sent: true, messageId: info.messageId };
   } catch (err) {
     console.warn(`[mailer] failed to send to ${to}:`, err.message);
+    await writeLog({ tenantId, eventId, vendorId, trigger, to, subject, status: "failed", error: err.message });
     return { sent: false, reason: err.message };
   }
 }
@@ -129,9 +153,19 @@ export async function sendByTrigger({ tenantId, eventId, trigger, to, vars = {} 
     html = renderTemplate(BUILTIN[trigger].body, vars);
   } else {
     console.warn(`[mailer] no template for trigger=${trigger}`);
+    await prisma.emailLog.create({
+      data: {
+        tenantId: tenantId === "_system" ? null : (tenantId || null),
+        eventId: eventId || null,
+        trigger,
+        toAddress: to || "",
+        subject: "",
+        status: "no_template",
+      },
+    }).catch(() => {});
     return { sent: false, reason: "no_template" };
   }
-  return sendMail({ tenantId, to, subject, html });
+  return sendMail({ tenantId, to, subject, html, eventId, trigger, vendorId: vars.vendor?.id });
 }
 
 // SMTP 連線測試（取代寫死 success）

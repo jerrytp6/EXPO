@@ -1,12 +1,19 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../store/auth";
 import { useData } from "../../store/data";
-import { SceneHead, Panel, Field } from "../../components/Scene";
+import { SceneHead, Panel, Field, DataRow } from "../../components/Scene";
 import { toast } from "../../store/toast";
+
+const STATUS_CHIP = {
+  sent:        { label: "已寄出",   cls: "chip-green" },
+  failed:      { label: "失敗",    cls: "chip-red" },
+  no_template: { label: "無模板",  cls: "chip-gray" },
+};
 
 export default function Smtp() {
   const user = useAuth((s) => s.user);
-  const { smtpSettings, updateSmtpSettings, testSmtpConnection, byId } = useData();
+  const { smtpSettings, updateSmtpSettings, testSmtpConnection, byId, emailLogs, fetchEmailLogs } = useData();
+  useEffect(() => { fetchEmailLogs({ limit: 50 }); }, []);
   const cfg = smtpSettings?.find((s) => s.companyId === user.companyId) || null;
 
   const [form, setForm] = useState({
@@ -114,6 +121,43 @@ export default function Smtp() {
             </span>
           )}
         </div>
+      </Panel>
+
+      <Panel
+        title={`寄信記錄（最近 ${emailLogs.length} 筆）`}
+        action={<button className="btn btn-sm btn-ghost" onClick={() => fetchEmailLogs({ limit: 50 })}>↻ 重新整理</button>}
+      >
+        {emailLogs.length === 0 ? (
+          <div className="py-8 text-center text-[13px]" style={{ color: "var(--text-tertiary)" }}>
+            尚無寄信記錄
+          </div>
+        ) : (
+          <>
+            <DataRow header cols={[
+              { content: "時間", w: "1.2fr" },
+              { content: "Trigger", w: "1fr" },
+              { content: "收件者", w: "1.6fr" },
+              { content: "主旨", w: "2fr" },
+              { content: "狀態", w: "0.8fr" },
+            ]} />
+            {emailLogs.map((l) => {
+              const st = STATUS_CHIP[l.status] || { label: l.status, cls: "" };
+              return (
+                <DataRow key={l.id} cols={[
+                  { content: <span className="text-[12px] font-display" style={{ color: "var(--text-tertiary)" }}>{l.sentAt?.slice(0, 19).replace("T", " ")}</span>, w: "1.2fr" },
+                  { content: <span className="text-[12px]">{l.trigger || "—"}</span>, w: "1fr" },
+                  { content: <span className="text-[12px]">{l.toAddress}</span>, w: "1.6fr" },
+                  { content: <span className="text-[12px] truncate">{l.subject || "—"}</span>, w: "2fr" },
+                  { content: (
+                    <span className={`chip ${st.cls}`} title={l.error || ""}>
+                      {st.label}
+                    </span>
+                  ), w: "0.8fr" },
+                ]} />
+              );
+            })}
+          </>
+        )}
       </Panel>
     </>
   );

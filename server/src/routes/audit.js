@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere } from "../lib/scope.js";
+import { parseListOpts, sendList } from "../lib/list-query.js";
 
 export const auditRouter = Router();
 
@@ -36,6 +37,27 @@ auditRouter.get("/submission-logs/:submissionId", async (req, res, next) => {
       orderBy: { at: "asc" },
     });
     res.json(logs);
+  } catch (err) { next(err); }
+});
+
+// E7 Email logs — 寄信記錄查詢
+auditRouter.get("/email-logs", async (req, res, next) => {
+  try {
+    const opts = parseListOpts(req, {
+      searchFields: ["toAddress", "subject"],
+      allowedFilters: ["eventId", "vendorId", "trigger", "status"],
+    });
+    const where = { ...scopeWhere(req), ...opts.where };
+    const [items, total] = await Promise.all([
+      prisma.emailLog.findMany({
+        where,
+        orderBy: { sentAt: "desc" },
+        skip: opts.skip,
+        take: opts.take || 100,
+      }),
+      prisma.emailLog.count({ where }),
+    ]);
+    sendList(res, req, items, total);
   } catch (err) { next(err); }
 });
 
