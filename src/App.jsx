@@ -51,6 +51,7 @@ import EquipmentCatalog from "./pages/event/EquipmentCatalog";
 import PreEventNotice from "./pages/event/PreEventNotice";
 import EventEmailTemplates from "./pages/event/EventEmailTemplates";
 import FormReview from "./pages/event/FormReview";
+import ConfirmationDashboard from "./pages/event/ConfirmationDashboard";
 
 function Home() {
   const user = useAuth((s) => s.user);
@@ -133,6 +134,7 @@ export default function App() {
         <Route path="/event/:eventId/notices"               element={<Protected role="event-manager"><Notices /></Protected>} />
         <Route path="/event/:eventId/forms"                 element={<Protected role="event-manager"><Forms /></Protected>} />
         <Route path="/event/:eventId/form-review"           element={<Protected role="event-manager"><FormReview /></Protected>} />
+        <Route path="/event/:eventId/confirmation"          element={<Protected role="event-manager"><ConfirmationDashboard /></Protected>} />
         <Route path="/event/:eventId/equipment"             element={<Protected role="event-manager"><EquipmentCatalog /></Protected>} />
         <Route path="/event/:eventId/pre-event"             element={<Protected role="event-manager"><PreEventNotice /></Protected>} />
         <Route path="/event/:eventId/email-templates"       element={<Protected role="event-manager"><EventEmailTemplates /></Protected>} />

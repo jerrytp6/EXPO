@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import rateLimit from "express-rate-limit";
 
 import { authRouter } from "./routes/auth.js";
 import { healthRouter } from "./routes/health.js";
@@ -28,8 +29,25 @@ app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 app.use(morgan("dev"));
 
+// Rate limiting：登入/SSO/密碼重設這類敏感端點較嚴；其他端點寬鬆
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,                       // 1 分鐘
+  max: 10,                                    // /auth/* 每 IP 10 次/分
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_requests" },
+});
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,                                   // 一般 API 300/分
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "too_many_requests" },
+});
+
 app.use("/", healthRouter);
-app.use("/auth", authRouter);
+app.use("/auth", authLimiter, authRouter);
+app.use(apiLimiter);                          // 其餘 routes 都套上
 
 // 公開 token endpoints（無 JWT 也能呼叫）
 app.use("/public", publicVendorsRouter);

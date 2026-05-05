@@ -58,6 +58,7 @@ function getEventSubMenu(eventId) {
     { to: `${base}/notices`,           label: "文件管理",       icon: "document" },
     { to: `${base}/forms`,             label: "表單管理",       icon: "check" },
     { to: `${base}/form-review`,       label: "表單審核",       icon: "shield" },
+    { to: `${base}/confirmation`,      label: "確認進度",       icon: "check" },
     { to: `${base}/equipment`,         label: "設備申請",       icon: "package" },
     { to: `${base}/pre-event`,         label: "展前通知",       icon: "bell" },
     { to: `${base}/email-templates`,   label: "郵件通知模板",   icon: "mail" },
