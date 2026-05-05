@@ -27,7 +27,7 @@ export default function VendorDecoration({ vendor, event }) {
     decorators,
     designs,
     messages,
-    inviteDecorator,
+    sendDecoratorInvitation,
     reviewDesign,
     sendMessage,
     loadProjectMedia,
@@ -47,19 +47,29 @@ export default function VendorDecoration({ vendor, event }) {
   const [feedbackText, setFeedbackText] = useState("");
   const [newMsg, setNewMsg] = useState("");
 
-  const submitInvite = () => {
+  const submitInvite = async () => {
     if (!inviteForm.company || !inviteForm.email) {
       toast.error("請填寫公司名稱與 Email");
       return;
     }
-    const inv = inviteDecorator(vendor.id, inviteForm);
-    toast.success(`邀請已建立`);
-    setInviteOpen(false);
-    setInviteForm({ company: "", email: "", message: "" });
+    try {
+      const inv = await sendDecoratorInvitation({
+        eventId: event.id,
+        fromVendorId: vendor.id,
+        decoratorEmail: inviteForm.email,
+        decoratorCompany: inviteForm.company,
+        message: inviteForm.message,
+      });
+      toast.success(`邀請已建立`);
+      setInviteOpen(false);
+      setInviteForm({ company: "", email: "", message: "" });
 
-    const link = `${window.location.origin}/decor-invite/${inv.token}`;
-    navigator.clipboard?.writeText(link);
-    toast.info("邀請連結已複製到剪貼簿");
+      const link = `${window.location.origin}/#/decor-invite/${inv.token}`;
+      navigator.clipboard?.writeText(link);
+      toast.info("邀請連結已複製到剪貼簿");
+    } catch (err) {
+      toast.error(`邀請失敗：${err.body?.error || err.message}`);
+    }
   };
 
   const approve = (designId) => {
