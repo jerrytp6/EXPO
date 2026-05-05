@@ -89,6 +89,10 @@ export async function sendMail({ tenantId, to, subject, html, text, replyTo }) {
 
 // 內建 fallback 模板（找不到使用者自訂模板時用）
 const BUILTIN = {
+  password_reset: {
+    subject: "【EX 系統】重設您的密碼",
+    body: "<p>{{user.name}} 您好，</p><p>我們收到您的密碼重設請求。請點擊下方連結設定新密碼（{{ttl}}內有效）：</p><p><a href=\"{{reset_url}}\">{{reset_url}}</a></p><p>如非本人請忽略此信，您的密碼不會被變動。</p>",
+  },
   vendor_confirmed: {
     subject: "【{{event.name}}】您已確認加入參展名單",
     body: "<p>{{vendor.contact}} 您好，</p><p>{{vendor.company}} 已正式確認參與「{{event.name}}」（{{event.location}}）。</p><p>請登入廠商入口完成後續資料：<a href=\"{{portal_url}}\">{{portal_url}}</a></p>",

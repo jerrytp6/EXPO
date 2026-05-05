@@ -105,9 +105,9 @@ export default function PortalLogin() {
               <label className="flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
                 <input type="checkbox" /> 記住我
               </label>
-              <a href="#" className="no-underline" style={{ color: "#0071e3" }} onClick={(e) => e.preventDefault()}>
+              <Link to="/forgot-password" className="no-underline" style={{ color: "#0071e3" }}>
                 忘記密碼？
-              </a>
+              </Link>
             </div>
 
             {(error || authError) && (

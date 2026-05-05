@@ -7,6 +7,7 @@ import { prisma } from "../lib/prisma.js";
 import { signToken } from "../lib/jwt.js";
 import { requireAuth } from "../middleware/auth.js";
 import { getEffectivePermissionsWithTenant } from "../lib/permissions.js";
+import { sendByTrigger, appUrl } from "../lib/mailer.js";
 
 export const authRouter = Router();
 
@@ -47,6 +48,79 @@ authRouter.post("/login", async (req, res, next) => {
         tenant: user.tenant ? { id: user.tenant.id, name: user.tenant.name } : null,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// E6：忘記密碼 / 重設密碼
+// ═══════════════════════════════════════════════════════════════════════
+//
+// 設計：
+// - reset token 是短期 JWT（1h），purpose="password_reset"
+// - 不存 DB（無狀態），重設後 user.passwordHash 變動讓舊 token 隱性失效
+// - forgot 不論 email 是否存在都回 200（防 email enumeration）
+
+const forgotSchema = z.object({ email: z.string().email() });
+const resetSchema = z.object({
+  token: z.string().min(10),
+  newPassword: z.string().min(6),
+});
+
+authRouter.post("/forgot-password", async (req, res, next) => {
+  try {
+    const { email } = forgotSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user && user.status === "active") {
+      // 1h JWT token
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, purpose: "password_reset", hashHint: user.passwordHash.slice(-8) },
+        process.env.JWT_SECRET,
+        { expiresIn: "1h" },
+      );
+      // 寄信（builtin fallback）
+      sendByTrigger({
+        tenantId: user.tenantId || "_system",
+        trigger: "password_reset",
+        to: user.email,
+        vars: {
+          user: { name: user.name, email: user.email },
+          reset_url: appUrl(`/reset-password?token=${token}`),
+          ttl: "1 小時",
+        },
+      }).catch((err) => console.warn("[forgot] mail failed", err.message));
+    }
+    // 不論結果都回 200（防 enumeration）
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+authRouter.post("/reset-password", async (req, res, next) => {
+  try {
+    const { token, newPassword } = resetSchema.parse(req.body);
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ error: "invalid_or_expired_token" });
+    }
+    if (payload.purpose !== "password_reset") {
+      return res.status(401).json({ error: "wrong_token_purpose" });
+    }
+    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+    if (!user || user.status !== "active") {
+      return res.status(404).json({ error: "user_not_found" });
+    }
+    // 防重放：token 簽發時的 hash 尾段必須對應當下的 passwordHash
+    if (payload.hashHint && user.passwordHash.slice(-8) !== payload.hashHint) {
+      return res.status(401).json({ error: "token_already_used" });
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    res.json({ ok: true, email: user.email });
   } catch (err) {
     next(err);
   }

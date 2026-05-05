@@ -5,6 +5,8 @@ import { ToastContainer } from "./components/Toast";
 
 import Login from "./pages/Login";
 import PortalLogin from "./pages/PortalLogin";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import PortalHome from "./pages/PortalHome";
 import SsoReceiver from "./pages/SsoReceiver";
 import { PortalAdminLayout } from "./components/PortalAdminLayout";
@@ -83,6 +85,8 @@ export default function App() {
 
         {/* Mock Portal SSO 入口（模擬客戶的統一認證平台） */}
         <Route path="/portal-login" element={<PortalLogin />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/portal" element={<PortalHome />} />
         <Route path="/sso" element={<SsoReceiver />} />
 
