@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { parseListOpts, sendList } from "../lib/list-query.js";
 
 export const usersRouter = Router();
 
@@ -25,16 +26,26 @@ const userSchema = z.object({
 // list — 跨租戶角色看全部、其他只看自己 tenant
 usersRouter.get("/", async (req, res, next) => {
   try {
-    const users = await prisma.user.findMany({
-      where: scopeWhere(req),
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true, email: true, name: true, role: true, title: true, status: true,
-        tenantId: true, createdAt: true,
-        tenant: { select: { id: true, name: true } },
-      },
+    const opts = parseListOpts(req, {
+      searchFields: ["name", "email", "title"],
+      allowedFilters: ["role", "status", "tenantId"],
     });
-    res.json(users);
+    const where = { ...scopeWhere(req), ...opts.where };
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: opts.skip,
+        take: opts.take,
+        select: {
+          id: true, email: true, name: true, role: true, title: true, status: true,
+          tenantId: true, createdAt: true,
+          tenant: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+    sendList(res, req, users, total);
   } catch (err) { next(err); }
 });
 

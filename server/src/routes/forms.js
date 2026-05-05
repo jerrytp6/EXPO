@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { parseListOpts, sendList } from "../lib/list-query.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
 
 export const formsRouter = Router();
@@ -107,16 +108,22 @@ const submitSchema = z.object({
 
 formsRouter.get("/submissions/list", async (req, res, next) => {
   try {
-    const where = { ...scopeWhere(req) };
-    if (req.query.eventId) where.eventId = req.query.eventId;
-    if (req.query.vendorId) where.vendorId = req.query.vendorId;
-    if (req.query.formId) where.formId = req.query.formId;
-    const subs = await prisma.formSubmission.findMany({
-      where,
-      orderBy: { submittedAt: "desc" },
-      include: { form: { select: { id: true, name: true, category: true } } },
+    const opts = parseListOpts(req, {
+      searchFields: ["fileName"],
+      allowedFilters: ["eventId", "vendorId", "formId", "status", "uploadedByRole"],
     });
-    res.json(subs);
+    const where = { ...scopeWhere(req), ...opts.where };
+    const [subs, total] = await Promise.all([
+      prisma.formSubmission.findMany({
+        where,
+        orderBy: { submittedAt: "desc" },
+        skip: opts.skip,
+        take: opts.take,
+        include: { form: { select: { id: true, name: true, category: true } } },
+      }),
+      prisma.formSubmission.count({ where }),
+    ]);
+    sendList(res, req, subs, total);
   } catch (err) { next(err); }
 });
 

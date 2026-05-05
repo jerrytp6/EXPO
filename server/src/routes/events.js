@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { permit } from "../middleware/permit.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { parseListOpts, sendList } from "../lib/list-query.js";
 
 export const eventsRouter = Router();
 
@@ -25,16 +26,26 @@ const eventSchema = z.object({
 
 eventsRouter.get("/", async (req, res, next) => {
   try {
-    const events = await prisma.event.findMany({
-      where: scopeWhere(req),
-      orderBy: { startDate: "desc" },
-      include: {
-        manager: { select: { id: true, name: true } },
-        boothTypes: { orderBy: { sortOrder: "asc" } },
-        _count: { select: { vendors: true } },
-      },
+    const opts = parseListOpts(req, {
+      searchFields: ["name", "type", "location"],
+      allowedFilters: ["status", "type", "managerId"],
     });
-    res.json(events);
+    const where = { ...scopeWhere(req), ...opts.where };
+    const [events, total] = await Promise.all([
+      prisma.event.findMany({
+        where,
+        orderBy: { startDate: "desc" },
+        skip: opts.skip,
+        take: opts.take,
+        include: {
+          manager: { select: { id: true, name: true } },
+          boothTypes: { orderBy: { sortOrder: "asc" } },
+          _count: { select: { vendors: true } },
+        },
+      }),
+      prisma.event.count({ where }),
+    ]);
+    sendList(res, req, events, total);
   } catch (err) { next(err); }
 });
 

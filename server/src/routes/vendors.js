@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { permit } from "../middleware/permit.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { parseListOpts, sendList } from "../lib/list-query.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
 
 export const vendorsRouter = Router();
@@ -26,13 +27,22 @@ const vendorSchema = z.object({
 // list (per event)
 vendorsRouter.get("/", async (req, res, next) => {
   try {
-    const where = { ...scopeWhere(req), ...(req.query.eventId ? { eventId: req.query.eventId } : {}) };
-    const vendors = await prisma.vendor.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      include: { boothType: { select: { id: true, name: true, price: true } } },
+    const opts = parseListOpts(req, {
+      searchFields: ["company", "contact", "email", "taxId"],
+      allowedFilters: ["eventId", "status", "rsvpStatus", "confirmStatus", "decorationMode"],
     });
-    res.json(vendors);
+    const where = { ...scopeWhere(req), ...opts.where };
+    const [vendors, total] = await Promise.all([
+      prisma.vendor.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: opts.skip,
+        take: opts.take,
+        include: { boothType: { select: { id: true, name: true, price: true } } },
+      }),
+      prisma.vendor.count({ where }),
+    ]);
+    sendList(res, req, vendors, total);
   } catch (err) { next(err); }
 });
 

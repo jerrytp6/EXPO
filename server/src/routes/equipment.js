@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
+import { parseListOpts, sendList } from "../lib/list-query.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
 import { generateEquipmentRequestPdf } from "../lib/pdf.js";
 
@@ -81,11 +82,20 @@ const requestItemSchema = z.object({
 
 equipmentRouter.get("/requests", async (req, res, next) => {
   try {
-    const where = { ...scopeWhere(req) };
-    if (req.query.eventId) where.eventId = req.query.eventId;
-    if (req.query.vendorId) where.vendorId = req.query.vendorId;
-    const reqs = await prisma.equipmentRequest.findMany({ where, orderBy: { createdAt: "desc" } });
-    res.json(reqs);
+    const opts = parseListOpts(req, {
+      allowedFilters: ["eventId", "vendorId", "status"],
+    });
+    const where = { ...scopeWhere(req), ...opts.where };
+    const [reqs, total] = await Promise.all([
+      prisma.equipmentRequest.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: opts.skip,
+        take: opts.take,
+      }),
+      prisma.equipmentRequest.count({ where }),
+    ]);
+    sendList(res, req, reqs, total);
   } catch (err) { next(err); }
 });
 

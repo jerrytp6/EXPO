@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { parseListOpts, sendList } from "../lib/list-query.js";
 
 export const tenantsRouter = Router();
 
@@ -22,11 +23,21 @@ const tenantSchema = z.object({
 // list
 tenantsRouter.get("/", requireRole("portal-admin", "super-admin"), async (req, res, next) => {
   try {
-    const tenants = await prisma.tenant.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { _count: { select: { users: true, events: true } } },
+    const opts = parseListOpts(req, {
+      searchFields: ["name", "taxId", "industry"],
+      allowedFilters: ["status"],
     });
-    res.json(tenants);
+    const [tenants, total] = await Promise.all([
+      prisma.tenant.findMany({
+        where: opts.where,
+        orderBy: { createdAt: "desc" },
+        skip: opts.skip,
+        take: opts.take,
+        include: { _count: { select: { users: true, events: true } } },
+      }),
+      prisma.tenant.count({ where: opts.where }),
+    ]);
+    sendList(res, req, tenants, total);
   } catch (err) { next(err); }
 });
 
