@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { requireAuth } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { upload, UPLOAD_DIR } from "../middleware/upload.js";
+import { verifyToken } from "../lib/jwt.js";
 
 export const uploadsRouter = Router();
 
@@ -23,16 +24,37 @@ uploadsRouter.post("/", requireAuth, tenantContext, upload.single("file"), (req,
 });
 
 // 下載：/files/{tenantId}/{YYYY-MM}/{filename}
-// MVP 公開（生產環境應加權限檢查與簽名 URL）
+// F5：要求 JWT（Bearer header 或 ?token= query），並比對路徑 tenantId
+// 跨租戶角色 (portal-admin / super-admin) 可存取所有 tenant 檔案
 export const filesRouter = Router();
-filesRouter.get("/:tenantId/:ym/:filename", (req, res) => {
+
+const CROSS_TENANT = new Set(["portal-admin", "super-admin"]);
+
+function readFileAuth(req, res, next) {
+  let token = null;
+  const header = req.headers.authorization || "";
+  if (header.startsWith("Bearer ")) token = header.slice(7);
+  else if (req.query.token) token = req.query.token;
+  if (!token) return res.status(401).json({ error: "missing_token" });
+  try {
+    req.user = verifyToken(token);
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "invalid_token" });
+  }
+}
+
+filesRouter.get("/:tenantId/:ym/:filename", readFileAuth, (req, res) => {
   const { tenantId, ym, filename } = req.params;
-  // 防 path traversal
   if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
     return res.status(400).json({ error: "invalid_filename" });
   }
   if (!/^\d{4}-\d{2}$/.test(ym)) {
     return res.status(400).json({ error: "invalid_ym" });
+  }
+  // tenant 比對
+  if (!CROSS_TENANT.has(req.user.role) && req.user.tenantId !== tenantId) {
+    return res.status(403).json({ error: "forbidden_tenant" });
   }
   const filePath = path.join(UPLOAD_DIR, tenantId, ym, filename);
   if (!filePath.startsWith(UPLOAD_DIR)) {

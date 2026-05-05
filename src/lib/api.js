@@ -84,10 +84,15 @@ async function uploadFile(file, fieldName = "file") {
 
 // 把 multer 回傳的 storedPath（"/files/...") 變成下載 URL
 // dev：vite proxy 把 /api/files → backend /files
-// prod：Nginx 把 /api/files → backend，或 /files alias 直接 serve（看 DEPLOYMENT.md）
+// prod：Nginx 把 /api/files → backend
+// F5：自動帶 ?token=jwt（瀏覽器直接開連結時，<a href> 不會帶 Authorization header）
 export function fileUrl(storedPath) {
   if (!storedPath) return null;
-  return `/api${storedPath.startsWith("/") ? storedPath : "/" + storedPath}`;
+  const base = `/api${storedPath.startsWith("/") ? storedPath : "/" + storedPath}`;
+  const token = getToken();
+  if (!token) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}token=${encodeURIComponent(token)}`;
 }
 
 // 觸發瀏覽器下載（帶 JWT，所以用 fetch + blob 而不是 a.href）
