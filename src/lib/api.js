@@ -90,6 +90,38 @@ export function fileUrl(storedPath) {
   return `/api${storedPath.startsWith("/") ? storedPath : "/" + storedPath}`;
 }
 
+// 觸發瀏覽器下載（帶 JWT，所以用 fetch + blob 而不是 a.href）
+export async function downloadFile(path, suggestedName) {
+  const url = path.startsWith("http") ? path : `/api${path.startsWith("/") ? path : "/" + path}`;
+  const token = getToken();
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    if (res.status === 401) clearToken();
+    throw new ApiError(res.status, errBody);
+  }
+  const blob = await res.blob();
+  // 從 Content-Disposition 拿 filename
+  let filename = suggestedName || "download";
+  const cd = res.headers.get("content-disposition");
+  if (cd) {
+    const m = cd.match(/filename="?([^"]+)"?/i);
+    if (m) {
+      try { filename = decodeURIComponent(m[1]); } catch { filename = m[1]; }
+    }
+  }
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objUrl);
+}
+
 export const api = {
   get: (path, opts) => request("GET", path, opts),
   post: (path, body, opts) => request("POST", path, { ...opts, body }),
@@ -98,6 +130,7 @@ export const api = {
   delete: (path, opts) => request("DELETE", path, opts),
   upload: uploadFile,
   fileUrl,
+  download: downloadFile,
 };
 
 export { ApiError };

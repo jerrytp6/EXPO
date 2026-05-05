@@ -4,6 +4,7 @@ import { useData } from "../../store/data";
 import { SceneHead, Panel, DataRow, StatGrid } from "../../components/Scene";
 import { Modal } from "../../components/Modal";
 import { toast } from "../../store/toast";
+import { api } from "../../lib/api";
 
 // 表單繳交審核頁 — 管理員側；對應 PDF p15 三態確認
 // 廠商繳交 → 管理員審核 → 通過 → 廠商確認 → 管理員可觸發重新確認
@@ -93,7 +94,7 @@ export default function FormReview() {
 
       <StatGrid stats={stats} />
 
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="flex gap-2 mb-4 flex-wrap items-center">
         {[
           { k: "all",                label: `全部 ${subs.length}` },
           { k: "submitted",          label: `待審 ${subs.filter(s => s.status === "submitted").length}` },
@@ -105,6 +106,16 @@ export default function FormReview() {
             {t.label}
           </button>
         ))}
+        <div className="ml-auto">
+          <button className="btn btn-ghost" onClick={async () => {
+            try {
+              const params = new URLSearchParams({ eventId });
+              if (filter !== "all") params.set("status", filter);
+              await api.download(`/forms/submissions/export.csv?${params}`, `${event?.name || "submissions"}.csv`);
+              toast.success("已匯出 CSV");
+            } catch (err) { toast.error(`匯出失敗：${err.body?.error || err.message}`); }
+          }}>📊 匯出 CSV</button>
+        </div>
       </div>
 
       <Panel>

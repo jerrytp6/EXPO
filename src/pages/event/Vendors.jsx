@@ -5,6 +5,7 @@ import { useData } from "../../store/data";
 import { SceneHead, Panel, DataRow, StatGrid } from "../../components/Scene";
 import { Icon } from "../../components/Icon";
 import { toast } from "../../store/toast";
+import { api } from "../../lib/api";
 
 const VENDOR_STATUS = {
   pending:    { label: "未寄送",     cls: "badge-gray" },
@@ -57,19 +58,18 @@ export default function Vendors() {
     setSelected(new Set());
   };
 
-  // CSV 匯出
-  const exportCSV = () => {
+  // E5：CSV 匯出（後端產生，欄位完整 + filter 兼容）
+  const exportCSV = async () => {
     if (roster.length === 0) { toast.error("參展名單為空"); return; }
-    const header = "公司名稱,統編,聯絡人,Email,電話,展位編號,確認日期";
-    const rows = roster.map((v) =>
-      [v.company, v.taxId, v.contact, v.email, v.phone, v.boothNumber || "", v.confirmedAt || ""].join(",")
-    );
-    const blob = new Blob(["\uFEFF" + [header, ...rows].join("\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${event.name}-參展名單.csv`;
-    a.click();
-    toast.success(`已匯出 ${roster.length} 筆`);
+    try {
+      await api.download(
+        `/vendors/export.csv?eventId=${eventId}&confirmStatus=confirmed`,
+        `${event.name}-參展名單.csv`,
+      );
+      toast.success(`已匯出 ${roster.length} 筆`);
+    } catch (err) {
+      toast.error(`匯出失敗：${err.body?.error || err.message}`);
+    }
   };
 
   // 在 pending tab 中，selected 裡未確認的

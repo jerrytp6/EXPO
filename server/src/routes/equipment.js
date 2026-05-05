@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
 import { parseListOpts, sendList } from "../lib/list-query.js";
+import { rowsToCsv, sendCsv } from "../lib/csv.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
 import { generateEquipmentRequestPdf } from "../lib/pdf.js";
 
@@ -130,6 +131,41 @@ equipmentRouter.post("/requests", async (req, res, next) => {
       },
     });
     res.status(201).json(created);
+  } catch (err) { next(err); }
+});
+
+// CSV 匯出
+equipmentRouter.get("/requests/export.csv", async (req, res, next) => {
+  try {
+    const opts = parseListOpts(req, {
+      allowedFilters: ["eventId", "vendorId", "status"],
+    });
+    const where = { ...scopeWhere(req), ...opts.where };
+    const rows = await prisma.equipmentRequest.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        vendor: { select: { company: true } },
+        event: { select: { name: true } },
+      },
+    });
+    const csv = rowsToCsv(rows, [
+      { key: "id",                  header: "申請單 ID" },
+      { key: "event.name",          header: "活動" },
+      { key: "vendor.company",      header: "廠商" },
+      { key: (r) => r.items?.length || 0, header: "項目數" },
+      { key: "totalAmount",         header: "總金額" },
+      { key: "status",              header: "狀態" },
+      { key: (r) => r.pdfGeneratedAt?.toISOString().slice(0, 10), header: "PDF 產生日" },
+      { key: "signedFileName",      header: "簽署檔" },
+      { key: "paymentProofFileName",header: "匯款單" },
+      { key: (r) => r.paidAt?.toISOString().slice(0, 10),  header: "付款日" },
+      { key: "reviewedBy",          header: "審核人" },
+      { key: (r) => r.reviewedAt?.toISOString().slice(0, 10), header: "審核日" },
+      { key: "vendorConfirmed",     header: "廠商已確認" },
+      { key: "needsReconfirm",      header: "待重新確認" },
+    ]);
+    sendCsv(res, `equipment-requests_${new Date().toISOString().slice(0, 10)}.csv`, csv);
   } catch (err) { next(err); }
 });
 

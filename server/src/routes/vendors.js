@@ -7,6 +7,7 @@ import { tenantContext } from "../middleware/tenant.js";
 import { permit } from "../middleware/permit.js";
 import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
 import { parseListOpts, sendList } from "../lib/list-query.js";
+import { rowsToCsv, sendCsv } from "../lib/csv.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
 
 export const vendorsRouter = Router();
@@ -43,6 +44,42 @@ vendorsRouter.get("/", async (req, res, next) => {
       prisma.vendor.count({ where }),
     ]);
     sendList(res, req, vendors, total);
+  } catch (err) { next(err); }
+});
+
+// CSV 匯出（同 list 條件）
+vendorsRouter.get("/export.csv", async (req, res, next) => {
+  try {
+    const opts = parseListOpts(req, {
+      searchFields: ["company", "contact", "email", "taxId"],
+      allowedFilters: ["eventId", "status", "rsvpStatus", "confirmStatus", "decorationMode"],
+    });
+    const where = { ...scopeWhere(req), ...opts.where };
+    const rows = await prisma.vendor.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: { boothType: { select: { name: true } }, event: { select: { name: true } } },
+    });
+    const csv = rowsToCsv(rows, [
+      { key: "id",                       header: "ID" },
+      { key: "company",                  header: "公司名稱" },
+      { key: "taxId",                    header: "統編" },
+      { key: "contact",                  header: "聯絡人" },
+      { key: "email",                    header: "Email" },
+      { key: "phone",                    header: "電話" },
+      { key: "event.name",               header: "活動" },
+      { key: "status",                   header: "狀態" },
+      { key: "rsvpStatus",               header: "RSVP" },
+      { key: "confirmStatus",            header: "確認狀態" },
+      { key: "boothType.name",           header: "攤位類型" },
+      { key: "boothNumber",              header: "攤位編號" },
+      { key: "decorationMode",           header: "裝潢方式" },
+      { key: "depositStatus",            header: "訂金" },
+      { key: "balanceStatus",            header: "尾款" },
+      { key: (r) => r.invitedAt?.toISOString().slice(0, 10),    header: "邀約日" },
+      { key: (r) => r.registeredAt?.toISOString().slice(0, 10), header: "註冊日" },
+    ]);
+    sendCsv(res, `vendors_${new Date().toISOString().slice(0, 10)}.csv`, csv);
   } catch (err) { next(err); }
 });
 

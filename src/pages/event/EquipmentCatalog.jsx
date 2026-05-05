@@ -4,6 +4,7 @@ import { useData } from "../../store/data";
 import { SceneHead, Panel, DataRow, Field, StatGrid } from "../../components/Scene";
 import { Modal } from "../../components/Modal";
 import { toast } from "../../store/toast";
+import { api } from "../../lib/api";
 
 const CATEGORIES = ["電力", "網路", "展示器材", "桌椅家具", "燈光音響", "其他"];
 
@@ -118,6 +119,15 @@ export default function EquipmentCatalog() {
       )}
 
       {tab === "requests" && (
+        <>
+        <div className="flex justify-end mb-3">
+          <button className="btn btn-ghost" onClick={async () => {
+            try {
+              await api.download(`/equipment/requests/export.csv?eventId=${eventId}`, `${event?.name || "equipment-requests"}.csv`);
+              toast.success("已匯出 CSV");
+            } catch (err) { toast.error(`匯出失敗：${err.body?.error || err.message}`); }
+          }}>📊 匯出 CSV</button>
+        </div>
         <Panel>
           <DataRow
             header
@@ -184,6 +194,7 @@ export default function EquipmentCatalog() {
           })}
           {requests.length === 0 && <div className="text-center py-10 text-[13px]" style={{ color: "var(--text-tertiary)" }}>尚無申請案件</div>}
         </Panel>
+        </>
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? "編輯設備" : "新增設備"} width="560px">
