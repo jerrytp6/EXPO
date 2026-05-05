@@ -9,6 +9,7 @@ import { scopeWhere, requireWriteTenant } from "../lib/scope.js";
 import { parseListOpts, sendList } from "../lib/list-query.js";
 import { rowsToCsv, sendCsv } from "../lib/csv.js";
 import { sendByTrigger, appUrl } from "../lib/mailer.js";
+import { eventBus } from "../lib/event-bus.js";
 
 export const vendorsRouter = Router();
 export const publicVendorsRouter = Router(); // 不掛 auth — 公開 token 流程
@@ -172,6 +173,19 @@ vendorsRouter.post("/:id/invite", permit("vendors", "invite"), async (req, res, 
       }),
     ]);
 
+    // F1 SSE 推播（含 vendor 資訊以便前端不用重新 fetch）
+    eventBus.emit("activity", {
+      tenantId: vendor.tenantId,
+      eventId: vendor.eventId,
+      vendorId: vendor.id,
+      activity: {
+        id: `tmp-${Date.now()}`, action: "invited",
+        tenantId: vendor.tenantId, eventId: vendor.eventId, vendorId: vendor.id,
+        at: new Date().toISOString(),
+        vendor: { id: vendor.id, company: vendor.company },
+      },
+    });
+
     // 寄邀約信（不阻塞回應）
     const mailRes = await sendByTrigger({
       tenantId: vendor.tenantId,
@@ -304,6 +318,15 @@ publicVendorsRouter.get("/invite/:token", async (req, res, next) => {
       await prisma.activity.create({
         data: { tenantId: inv.tenantId, eventId: inv.eventId, vendorId: inv.vendorId, action: "clicked" },
       });
+      eventBus.emit("activity", {
+        tenantId: inv.tenantId, eventId: inv.eventId, vendorId: inv.vendorId,
+        activity: {
+          id: `tmp-${Date.now()}`, action: "clicked",
+          tenantId: inv.tenantId, eventId: inv.eventId, vendorId: inv.vendorId,
+          at: new Date().toISOString(),
+          vendor: { id: inv.vendor.id, company: inv.vendor.company },
+        },
+      });
     }
     res.json({ event: inv.event, vendor: inv.vendor });
   } catch (err) { next(err); }
@@ -359,6 +382,15 @@ publicVendorsRouter.post("/vendors/:id/register", async (req, res, next) => {
     });
     await prisma.activity.create({
       data: { tenantId: vendor.tenantId, eventId: vendor.eventId, vendorId: vendor.id, action: "registered" },
+    });
+    eventBus.emit("activity", {
+      tenantId: vendor.tenantId, eventId: vendor.eventId, vendorId: vendor.id,
+      activity: {
+        id: `tmp-${Date.now()}`, action: "registered",
+        tenantId: vendor.tenantId, eventId: vendor.eventId, vendorId: vendor.id,
+        at: new Date().toISOString(),
+        vendor: { id: vendor.id, company: vendor.company },
+      },
     });
     res.json(vendor);
   } catch (err) { next(err); }

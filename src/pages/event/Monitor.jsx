@@ -3,6 +3,7 @@ import { useParams, Navigate } from "react-router-dom";
 import { useData } from "../../store/data";
 import { SceneHead, Panel, StatGrid } from "../../components/Scene";
 import { Icon } from "../../components/Icon";
+import { getToken } from "../../lib/api";
 
 function timeAgo(ts) {
   const t = typeof ts === "number" ? ts : new Date(ts).getTime();
@@ -29,14 +30,32 @@ export default function Monitor() {
   const event = events.find((e) => e.id === eventId);
   const [tick, setTick] = useState(0);
 
-  // 每 5 秒輪詢 activities + 刷新時間顯示
+  // 每 30 秒重新刷新時間顯示（不再用 polling，改 SSE）
   useEffect(() => {
-    fetchActivities({ eventId, limit: 50 });
-    const t = setInterval(() => {
-      setTick((n) => n + 1);
-      fetchActivities({ eventId, limit: 50 });
-    }, 5000);
+    const t = setInterval(() => setTick((n) => n + 1), 30000);
     return () => clearInterval(t);
+  }, []);
+
+  // F1：SSE 即時推 activity（替代 5 秒 polling）+ 初次載入歷史
+  useEffect(() => {
+    if (!eventId) return;
+    fetchActivities({ eventId, limit: 50 });
+    const token = getToken();
+    if (!token) return;
+    const url = `/api/audit/stream?eventId=${eventId}&token=${encodeURIComponent(token)}`;
+    const es = new EventSource(url);
+    es.addEventListener("activity", (ev) => {
+      try {
+        const a = JSON.parse(ev.data);
+        // unshift 到 store activities 最前面（避免重新 fetch）
+        useData.setState((s) => ({ activities: [a, ...s.activities].slice(0, 100) }));
+      } catch {}
+    });
+    es.onerror = () => {
+      // EventSource 會自動重連，這裡只記 log
+      console.warn("[Monitor SSE] connection error / reconnecting");
+    };
+    return () => es.close();
   }, [eventId]);
 
   if (!event) return <Navigate to="/event" replace />;

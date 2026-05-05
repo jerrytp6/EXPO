@@ -4,10 +4,52 @@ import { requireAuth } from "../middleware/auth.js";
 import { tenantContext } from "../middleware/tenant.js";
 import { scopeWhere } from "../lib/scope.js";
 import { parseListOpts, sendList } from "../lib/list-query.js";
+import { eventBus } from "../lib/event-bus.js";
+import { verifyToken } from "../lib/jwt.js";
 
 export const auditRouter = Router();
 
+// SSE 端不能用 Authorization header（EventSource 不支援），改 query 驗
+auditRouter.get("/stream", (req, res, next) => {
+  try {
+    const token = req.query.token;
+    if (!token) return res.status(401).json({ error: "missing_token" });
+    req.user = verifyToken(token);
+    // 簡化的 tenant context（避免引入 prisma extension 開銷）
+    const isCrossTenant = ["portal-admin", "super-admin"].includes(req.user.role);
+    req.isCrossTenant = isCrossTenant;
+    req.tenantId = isCrossTenant ? (req.query.tenantId || null) : req.user.tenantId;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "invalid_token" });
+  }
+}, sseHandler);
+
 auditRouter.use(requireAuth, tenantContext);
+
+// F1 — SSE handler（client: EventSource("/api/audit/stream?eventId=xxx&token=jwt")）
+function sseHandler(req, res) {
+  const eventId = req.query.eventId;
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // Nginx 不要 buffer
+  res.flushHeaders?.();
+  res.write(`: connected\n\n`);
+  const heartbeat = setInterval(() => res.write(`: ping\n\n`), 30000);
+
+  const handler = (payload) => {
+    if (eventId && payload.eventId !== eventId) return;
+    if (req.tenantId && !req.isCrossTenant && payload.tenantId !== req.tenantId) return;
+    res.write(`event: activity\ndata: ${JSON.stringify(payload.activity)}\n\n`);
+  };
+  eventBus.on("activity", handler);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    eventBus.off("activity", handler);
+  });
+}
 
 // 廠商行動 audit（vendors 邀約 / clicked / registered 等）
 auditRouter.get("/activities", async (req, res, next) => {
